@@ -40,7 +40,7 @@ Schriftart: Helvetica-Bold
 Schriftgröße: 9.989105224609375
 Farbe: 866432
 ----------------------------------------
-Text: 
+Text: platz2
 Position: (521.5273132324219, 516.1068115234375, 522.4869384765625, 529.86181640625)
 Schriftart: Helvetica-Bold
 Schriftgröße: 9.989105224609375
@@ -298,28 +298,28 @@ Schriftart: Helvetica-Bold
 Schriftgröße: 9.989105224609375
 Farbe: 866432
 ----------------------------------------
-Text: Vorteile durch steuerfreie Einspeisung
+Text: Einsparung durch Speichernutzung
 Position: (39.64636993408203, 561.1077270507812, 211.7286834716797, 575.861572265625)
 Schriftart: Helvetica-Bold
 Schriftgröße: 9.988286018371582
 Farbe: 3487029
 ----------------------------------------
-Text: 
+Text: Einnahmen aus Batterieüberschuss
 Position: (311.5273132324219, 516.1068115234375, 482.4869384765625, 529.86181640625)
 Schriftart: Helvetica-Bold
 Schriftgröße: 9.988286018371582
 Farbe: 3487029
 ----------------------------------------
 Text: Erträge pro Jahr (gesamt)
-Position: (39.64636993408203, 586.8113403320312, 211.7286834716797, 604.6962280273438)
+Position: (110.64640045166016, 586.8113403320312, 278.091552734375, 604.6962280273438)
 Schriftart: Helvetica-Bold
-Schriftgröße: 10.988289833068848
+Schriftgröße: 12.988289833068848
 Farbe: 3487029
 ----------------------------------------
 Text: Gesamt
-Position: (240.05039978027344, 584.6713256835938, 278.92803955078125, 605.3101806640625)
+Position: (312.0504150390625, 584.6713256835938, 382.8851318359375, 605.3101806640625)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.988289833068848
+Schriftgröße: 14.988289833068848
 Farbe: 866432
 ----------------------------------------
 Text: tom-90
