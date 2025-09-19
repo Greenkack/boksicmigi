@@ -164,8 +164,8 @@ PLACEHOLDER_MAPPING.update({
 PLACEHOLDER_MAPPING.update({
     # "Heizung" soll zur reinen Modulanzahl werden (
     "Heizung": "pv_modules_count_with_unit",
-    # "Warmwasser" soll die Wechselrichter-Gesamtleistung (kW) anzeigen
-    "Warmwasser": "inverter_total_power_kw",
+    # "Warmwasser" soll die Wechselrichter-Gesamtleistung (W mit Tausendertrennzeichen) anzeigen
+    "Warmwasser": "inverter_total_power_w",
     # "Verbrauch" soll die Speicherkapazität (kWh) anzeigen
     "Verbrauch": "storage_capacity_kwh",
     # Neue Anforderungen Seite 1:
@@ -245,6 +245,7 @@ PLACEHOLDER_MAPPING.update({
     # wir mappen die blauen Kurz-Begriffe auf die dynamischen Geldwerte:
     "Direkt": "self_consumption_without_battery_eur",
     "Einspeisung": "annual_feed_in_revenue_eur",
+    "platz1": "tax_benefits_eur",  # Steuerliche Vorteile
     "Speichernutzung": "battery_usage_savings_eur",
     "Überschuss": "battery_surplus_feed_in_eur",
     "Gesamt": "total_annual_savings_eur",
@@ -689,12 +690,15 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
                 inv_total_kw = float(inv_total_kw) / 1000
                 print(f"WARNUNG: Wechselrichter-Leistung war wahrscheinlich in Watt angegeben. Korrigiert zu {inv_total_kw} kW")
             
-            # Neu: ohne Dezimalstellen anzeigen
+            # Neu: ohne Dezimalstellen anzeigen (kW für Seite 4)
             result["inverter_total_power_kw"] = fmt_number(float(inv_total_kw), 0, "kW")
+            
+            # Neu: Wechselrichterleistung in Watt für Seite 1 "Warmwasser" Platz
+            inv_watt = int(float(inv_total_kw) * 1000)
+            result["inverter_total_power_w"] = fmt_number(inv_watt, 0, "W")
             
             # Wechselrichter-Überschrift für Seite 4 mit Leistung
             # Konvertiere kW zu Watt für die Anzeige (z.B. "WECHSELRICHTER - 10.000 W")
-            inv_watt = int(float(inv_total_kw) * 1000)
             result["inverter_section_title"] = f"WECHSELRICHTER – {inv_watt:,} W".replace(",", ".")
         else:
             result["inverter_section_title"] = "WECHSELRICHTER"
@@ -1149,11 +1153,20 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
     val_feedin_money                = (feedin_kwh or 0.0)                * float(eeg_eur_per_kwh)
     val_speicher_nutzung_money      = (speicher_nutzung_kwh or 0.0)      * float(price_eur_per_kwh)
     val_speicher_ueberschuss_money  = (speicher_ueberschuss_kwh or 0.0)  * float(eeg_eur_per_kwh)
-    total_savings = val_direct_money + val_feedin_money + val_speicher_nutzung_money + val_speicher_ueberschuss_money 
+    
+    # 5) Neue Berechnung: Steuerliche Vorteile
+    # Einspeisevergütung unterliegt der Einkommensteuer, daher ist die Steuerersparnis ein Vorteil
+    einkommensteuer_satz = parse_float(project_data.get("income_tax_rate") or project_details.get("income_tax_rate") or analysis_results.get("income_tax_rate")) or 0.42  # Fallback: 42% (Standard in Deutschland)
+    val_steuerliche_vorteile = val_feedin_money * (einkommensteuer_satz / 100.0) if einkommensteuer_satz > 1 else val_feedin_money * einkommensteuer_satz
+    
+    # Neue Gesamtberechnung: NUR Direkt + Einspeisung + Steuerliche Vorteile (OHNE Speicher)
+    total_savings = val_direct_money + val_feedin_money + val_steuerliche_vorteile 
 
     # 5) Ergebnisfelder (NUR HIER setzen)
     result["self_consumption_without_battery_eur"] = fmt_number(val_direct_money, 2, "€")
     result["direct_grid_feed_in_eur"]              = fmt_number(val_feedin_money, 2, "€")
+    result["annual_feed_in_revenue_eur"]           = fmt_number(val_feedin_money, 2, "€")  # Alias für Einspeisung
+    result["tax_benefits_eur"]                     = fmt_number(val_steuerliche_vorteile, 2, "€")  # Neue steuerliche Vorteile
     result["battery_usage_savings_eur"]            = fmt_number(val_speicher_nutzung_money, 2, "€")
     result["battery_surplus_feed_in_eur"]          = fmt_number(val_speicher_ueberschuss_money, 2, "€")
     result["total_annual_savings_eur"]             = fmt_number(total_savings, 2, "€")
@@ -1170,7 +1183,10 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
     print("DEBUG PAGE3 -> Energieströme (kWh):")
     print(f"  Direkt: {direct_kwh:.2f} | Einspeisung: {feedin_kwh:.2f} | Speicher Ladung: {speicher_ladung_kwh:.2f} | Nutzung: {speicher_nutzung_kwh:.2f} | Überschuss: {speicher_ueberschuss_kwh:.2f}")
     print("DEBUG PAGE3 -> Geldwerte (€):")
-    print(f"  Direkt: {val_direct_money:.2f} | Einspeisung: {val_feedin_money:.2f} | Nutzung: {val_speicher_nutzung_money:.2f} | Überschuss: {val_speicher_ueberschuss_money:.2f} | Gesamt: {total_savings:.2f}")
+    print(f"  Direkt: {val_direct_money:.2f} | Einspeisung: {val_feedin_money:.2f} | Steuervorteile: {val_steuerliche_vorteile:.2f}")
+    print(f"  Speichernutzung: {val_speicher_nutzung_money:.2f} | Speicherüberschuss: {val_speicher_ueberschuss_money:.2f}")
+    print(f"  GESAMT (ohne Speicher): {total_savings:.2f}")
+    print(f"  Einkommensteuersatz: {einkommensteuer_satz*100 if einkommensteuer_satz <= 1 else einkommensteuer_satz:.1f}%")
     # --- Ende Kernblock ---
 
 
@@ -2214,12 +2230,19 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
             )
             result["self_consumption_without_battery_eur"] = _eur(direct_kwh_fs * price_eur_kwh)
 
-        # Summe über die vier Kachel-Bestandteile bilden
+        # Steuerliche Vorteile hinzufügen, falls noch nicht berechnet
+        if not result.get("tax_benefits_eur"):
+            # Einspeisevergütung für Steuerberechnung verwenden
+            feedin_value = _to_float((result.get("annual_feed_in_revenue_eur") or result.get("direct_grid_feed_in_eur") or "0").replace("€","").replace(".","").replace(",","."))
+            einkommensteuer_satz = _to_float(project_data.get("income_tax_rate") or project_details.get("income_tax_rate") or analysis_results.get("income_tax_rate")) or 0.42
+            tax_benefits = feedin_value * (einkommensteuer_satz / 100.0 if einkommensteuer_satz > 1 else einkommensteuer_satz)
+            result["tax_benefits_eur"] = _eur(tax_benefits)
+
+        # Summe über die DREI Hauptbestandteile bilden (OHNE Speicherwerte wie gewünscht)
         keys_sum = (
             "self_consumption_without_battery_eur",
             "direct_grid_feed_in_eur",
-            "battery_usage_savings_eur",
-            "battery_surplus_feed_in_eur",
+            "tax_benefits_eur",  # Steuerliche Vorteile
         )
         total = sum(
             _to_float((result.get(k) or "0").replace("€","").replace(".","").replace(",","."))

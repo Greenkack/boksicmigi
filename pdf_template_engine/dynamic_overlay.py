@@ -381,6 +381,7 @@ def generate_overlay(coords_dir: Path, dynamic_data: Dict[str, str], total_pages
             # Berechnungswerte rechtsbündig ausrichten
             "Direkt",
             "Einspeisung", 
+            "platz1",  # Steuerliche Vorteile
             "Speichernutzung",
             "Überschuss",
             "Gesamt",
