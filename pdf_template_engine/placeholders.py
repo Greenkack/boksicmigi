@@ -246,8 +246,6 @@ PLACEHOLDER_MAPPING.update({
     "Direkt": "self_consumption_without_battery_eur",
     "Einspeisung": "annual_feed_in_revenue_eur",
     "platz1": "tax_benefits_eur",  # Steuerliche Vorteile
-    "Speichernutzung": "battery_usage_savings_eur",
-    "Überschuss": "battery_surplus_feed_in_eur",
     "Gesamt": "total_annual_savings_eur",
     # KWh-Werte für Batterieberechnungen auf Seite 3
     "Speicherladung (kWh)": "calc_battery_charge_kwh_page3",
@@ -2419,9 +2417,9 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
             result["feed_in_tariff_text"] = f"{eeg_ct_per_kwh:.2f} Cent / kWh"
         else:
             # Fallback ohne Admin-Settings
-            result["feed_in_tariff_text"] = "7,86 Cent / kWh"
+            result["feed_in_tariff_text"] = " Cent / kWh"
     except Exception:
-        result["feed_in_tariff_text"] = "7,86 Cent / kWh"
+        result["feed_in_tariff_text"] = " Cent / kWh"
 
     # === NEUE LOGO-INTEGRATION FÜR SEITE 4 ===
     # Logo-Platzhalter für Hersteller basierend auf ausgewählten Produkten

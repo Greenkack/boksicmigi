@@ -162,7 +162,7 @@ def render_ui() -> None:
 
     base_dir = Path(__file__).parent
     coords_dir = base_dir / "coords"
-    bg_dir = base_dir / "pdf_templates_static" / "notext"
+    bg_dir = base_dir / ""
 
     st.title("Angebots-PDF (7 Seiten Templates + optional alte Ausgabe)")
 
