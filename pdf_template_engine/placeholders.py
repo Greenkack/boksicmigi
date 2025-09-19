@@ -1098,11 +1098,13 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         eeg_eur_per_kwh = _val if _val < 1 else (_val / 100.0)
     if not eeg_eur_per_kwh:
         try:
-            from database import load_admin_setting
-            fit = load_admin_setting("feed_in_tariffs", {}) or {}
+            # Verwende die DEFAULT_FEED_IN_TARIFFS_FALLBACK Tabelle aus dem Code
             mode = (project_data.get("einspeise_art") or "parts")
             anlage_kwp = parse_float(analysis_results.get("anlage_kwp")) or parse_float(project_data.get("anlage_kwp")) or 0.0
-            for t in (fit.get(mode, []) if isinstance(fit, dict) else []):
+            
+            # DEFAULT_FEED_IN_TARIFFS_FALLBACK verwenden (wie in Zeilen 38-50 definiert)
+            tariff_table = DEFAULT_FEED_IN_TARIFFS_FALLBACK.get(mode, [])
+            for t in tariff_table:
                 kmin = parse_float(t.get("kwp_min")) or 0.0
                 kmax = parse_float(t.get("kwp_max")) or 999999.0
                 if kmin <= anlage_kwp <= kmax:
@@ -2035,16 +2037,16 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
             # EEG Tarif erneut bestimmen (gleiche Logik wie Seite3 oben)
             try:
                 anlage_kwp_local = parse_float(analysis_results.get("anlage_kwp")) or 0.0
-                from database import load_admin_setting as _load_tar
-                fit_loc = _load_tar("feed_in_tariffs", {})
+                # Verwende DEFAULT_FEED_IN_TARIFFS_FALLBACK anstatt Datenbank
                 mode_loc = project_data.get("einspeise_art", "parts")
                 local_tariff = None
-                for trf in fit_loc.get(mode_loc, []):
+                tariff_table_local = DEFAULT_FEED_IN_TARIFFS_FALLBACK.get(mode_loc, [])
+                for trf in tariff_table_local:
                     if trf.get("kwp_min", 0) <= anlage_kwp_local <= trf.get("kwp_max", 999):
                         local_tariff = (trf.get("ct_per_kwh", 7.86) or 7.86) / 100.0
                         break
                 if local_tariff is None:
-                    local_tariff = 0.068  # Fallback 6,8 ct
+                    local_tariff = 0.0786  # Fallback 7,86 ct (wie in DEFAULT_FEED_IN_TARIFFS_FALLBACK)
             except Exception:
                 local_tariff = 0.068
             # Neuberechnung wenn nötig
