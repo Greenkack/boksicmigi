@@ -43,6 +43,16 @@ except ImportError:
     PRODUCT_DB_AVAILABLE = False
     # BRAND_LOGO_AVAILABLE = False
 
+# Zahlungsmodalitäten-Management
+try:
+    from admin_payment_terms_ui import render_comprehensive_admin_payment_terms_ui_with_variants
+    PAYMENT_TERMS_AVAILABLE = True
+except ImportError:
+    def render_comprehensive_admin_payment_terms_ui_with_variants(load_func, save_func, suffix=""):
+        st.error("💳 Zahlungsmodalitäten-Modul nicht verfügbar")
+        st.info("Bitte überprüfen Sie die admin_payment_terms_ui.py Datei")
+    PAYMENT_TERMS_AVAILABLE = False
+
 # NEU: Definition von WIDGET_KEY_SUFFIX, um NameError zu beheben
 # Dieser Suffix wird verwendet, um die Eindeutigkeit von Streamlit-Widget-Keys
 # innerhalb dieses Admin-Panels sicherzustellen.
@@ -161,7 +171,7 @@ ADMIN_TAB_KEYS_DEFINITION_GLOBAL = [
     "admin_tab_company_management_new", "admin_tab_product_management", "admin_tab_logo_management", 
     "admin_tab_product_database_crud",
     "admin_tab_general_settings", "admin_tab_price_matrix", "admin_tab_tariff_management", "admin_tab_pdf_design",
-    "admin_tab_visualization_settings",
+    "admin_tab_payment_terms", "admin_tab_visualization_settings",
     "admin_tab_advanced"
 ]
 
@@ -1846,6 +1856,7 @@ def render_admin_panel(
         "admin_tab_price_matrix": lambda: render_price_matrix(load_admin_setting_func, save_admin_setting_func, _parse_price_matrix_csv_safe, _parse_price_matrix_excel_func),
         "admin_tab_tariff_management": lambda: render_tariff_management(load_admin_setting_func, save_admin_setting_func),
         "admin_tab_pdf_design": lambda: render_pdf_design_settings(load_admin_setting_func, save_admin_setting_func),
+        "admin_tab_payment_terms": lambda: render_comprehensive_admin_payment_terms_ui_with_variants(load_admin_setting_func, save_admin_setting_func, WIDGET_KEY_SUFFIX),
         "admin_tab_visualization_settings": lambda: render_visualization_settings(load_admin_setting_func, save_admin_setting_func),
         "admin_tab_advanced": lambda: render_advanced_settings(load_admin_setting_func, save_admin_setting_func),
     }
