@@ -933,6 +933,21 @@ def render_product_management(
     with st.expander(form_manual_title, expanded=(st.session_state.product_to_edit_id_manual is not None or not list_products_func(None))):
         form_key_manual_prod_ui = f"product_form_manual_ui_man_{st.session_state.product_to_edit_id_manual or 'new_prod_man'}{WIDGET_KEY_SUFFIX}" 
         with st.form(key=form_key_manual_prod_ui, clear_on_submit=False): 
+            # Helper für sichere Numerik-Konvertierung (None -> 0 / 0.0)
+            def _safe_float(v, default=0.0):
+                try:
+                    if v is None or (isinstance(v, str) and v.strip() == ""):
+                        return float(default)
+                    return float(v)
+                except Exception:
+                    return float(default)
+            def _safe_int(v, default=0):
+                try:
+                    if v is None or (isinstance(v, str) and v.strip() == ""):
+                        return int(default)
+                    return int(float(v))
+                except Exception:
+                    return int(default)
             st.text_input("Produkt ID", value=str(st.session_state.product_to_edit_id_manual) if st.session_state.product_to_edit_id_manual else "Automatisch", disabled=True, key=f"{form_key_manual_prod_ui}_id_man")
             p_model_name_form = st.text_input(label=get_text_local("product_model_name_label","Modellname*"), value=product_data_for_manual_form.get('model_name', ''), key=f"{form_key_manual_prod_ui}_model_name_man")
             available_cats_form = [cat for cat in product_categories_manual_list if cat and str(cat).lower() != "ohne speicher"]
@@ -942,9 +957,9 @@ def render_product_management(
                 default_cat_idx = available_cats_form.index(current_cat_val)
             p_category_form = st.selectbox(label=get_text_local("product_category_label","Kategorie*"), options=available_cats_form, index=default_cat_idx, key=f"{form_key_manual_prod_ui}_category_man", disabled=not available_cats_form)
             p_brand_form = st.text_input(label=get_text_local("product_brand_label","Hersteller"), value=product_data_for_manual_form.get('brand', ''), key=f"{form_key_manual_prod_ui}_brand_man")
-            p_price_form = st.number_input(label=get_text_local("product_price_euro_label","Preis (€)"), min_value=0.0, value=float(product_data_for_manual_form.get('price_euro', 0.0)), step=0.01, format="%.2f", key=f"{form_key_manual_prod_ui}_price_man")
-            p_add_cost_form = st.number_input(label=get_text_local("product_additional_cost_netto_label","Zusatzkosten Netto (€)"), min_value=0.0, value=float(product_data_for_manual_form.get('additional_cost_netto', 0.0)),step=0.01,format="%.2f", key=f"{form_key_manual_prod_ui}_add_cost_man")
-            p_warranty_form = st.number_input(label=get_text_local("product_warranty_years_label","Garantie (Jahre)"), min_value=0, value=int(product_data_for_manual_form.get('warranty_years', 0)), step=1, key=f"{form_key_manual_prod_ui}_warranty_man")
+            p_price_form = st.number_input(label=get_text_local("product_price_euro_label","Preis (€)"), min_value=0.0, value=_safe_float(product_data_for_manual_form.get('price_euro', 0.0)), step=0.01, format="%.2f", key=f"{form_key_manual_prod_ui}_price_man")
+            p_add_cost_form = st.number_input(label=get_text_local("product_additional_cost_netto_label","Zusatzkosten Netto (€)"), min_value=0.0, value=_safe_float(product_data_for_manual_form.get('additional_cost_netto', 0.0)),step=0.01,format="%.2f", key=f"{form_key_manual_prod_ui}_add_cost_man")
+            p_warranty_form = st.number_input(label=get_text_local("product_warranty_years_label","Garantie (Jahre)"), min_value=0, value=_safe_int(product_data_for_manual_form.get('warranty_years', 0)), step=1, key=f"{form_key_manual_prod_ui}_warranty_man")
             
             st.markdown("**"+get_text_local("product_image_header","Produktbild")+"**")
             uploaded_product_image_manual_file_form = st.file_uploader(get_text_local("product_image_upload_label","Produktbild (PNG, JPG, max. 2MB)"), type=["png", "jpg", "jpeg"], key=f"{form_key_manual_prod_ui}_image_upload_man")
@@ -981,19 +996,19 @@ def render_product_management(
             st.markdown(f"**{get_text_local('product_category_specific_fields_header','Spezifische Felder für Kategorie')}: {p_category_form or get_text_local('product_no_category_selected','Keine Kategorie gewählt')}**")
             p_capacity_w_val, p_power_kw_val, p_storage_power_kw_val, p_efficiency_percent_val, p_length_m_val, p_width_m_val, p_weight_kg_val, p_max_cycles_val = None,None,None,None,None,None,None,None
             if p_category_form == 'Modul':
-                p_capacity_w_val = st.number_input(label=get_text_local("module_capacity_w_label","Leistung (Wp)"), min_value=0.0, value=float(product_data_for_manual_form.get('capacity_w', 0.0)), step=1.0, key=f"{form_key_manual_prod_ui}_cap_w_man")
-                p_efficiency_percent_val = st.number_input(label=get_text_local("module_efficiency_percent_label","Wirkungsgrad (%)"), min_value=0.0,max_value=100.0, value=float(product_data_for_manual_form.get('efficiency_percent', 0.0)),step=0.01,format="%.2f", key=f"{form_key_manual_prod_ui}_eff_mod_man")
+                p_capacity_w_val = st.number_input(label=get_text_local("module_capacity_w_label","Leistung (Wp)"), min_value=0.0, value=_safe_float(product_data_for_manual_form.get('capacity_w', 0.0)), step=1.0, key=f"{form_key_manual_prod_ui}_cap_w_man")
+                p_efficiency_percent_val = st.number_input(label=get_text_local("module_efficiency_percent_label","Wirkungsgrad (%)"), min_value=0.0,max_value=100.0, value=_safe_float(product_data_for_manual_form.get('efficiency_percent', 0.0)),step=0.01,format="%.2f", key=f"{form_key_manual_prod_ui}_eff_mod_man")
                 m_c1, m_c2 = st.columns(2)
-                p_length_m_val = m_c1.number_input(label=get_text_local("module_length_m_label","Länge (m)"), min_value=0.0,value=float(product_data_for_manual_form.get('length_m',0.0)),step=0.001,format="%.3f", key=f"{form_key_manual_prod_ui}_len_man")
-                p_width_m_val = m_c2.number_input(label=get_text_local("module_width_m_label","Breite (m)"),min_value=0.0,value=float(product_data_for_manual_form.get('width_m',0.0)),step=0.001,format="%.3f", key=f"{form_key_manual_prod_ui}_width_man")
-                p_weight_kg_val = st.number_input(label=get_text_local("module_weight_kg_label","Gewicht (kg)"), min_value=0.0, value=float(product_data_for_manual_form.get('weight_kg', 0.0)), step=0.1, key=f"{form_key_manual_prod_ui}_weight_man")
+                p_length_m_val = m_c1.number_input(label=get_text_local("module_length_m_label","Länge (m)"), min_value=0.0,value=_safe_float(product_data_for_manual_form.get('length_m',0.0)),step=0.001,format="%.3f", key=f"{form_key_manual_prod_ui}_len_man")
+                p_width_m_val = m_c2.number_input(label=get_text_local("module_width_m_label","Breite (m)"),min_value=0.0,value=_safe_float(product_data_for_manual_form.get('width_m',0.0)),step=0.001,format="%.3f", key=f"{form_key_manual_prod_ui}_width_man")
+                p_weight_kg_val = st.number_input(label=get_text_local("module_weight_kg_label","Gewicht (kg)"), min_value=0.0, value=_safe_float(product_data_for_manual_form.get('weight_kg', 0.0)), step=0.1, key=f"{form_key_manual_prod_ui}_weight_man")
             elif p_category_form == 'Wechselrichter':
-                p_power_kw_val = st.number_input(label=get_text_local("inverter_power_kw_label","Nennleistung AC (kW)"), min_value=0.0, value=float(product_data_for_manual_form.get('power_kw', 0.0)), step=0.1, key=f"{form_key_manual_prod_ui}_power_kw_inv_man")
-                p_efficiency_percent_val = st.number_input(label=get_text_local("inverter_max_efficiency_percent_label","Max. Wirkungsgrad (%)"), min_value=0.0,max_value=100.0, value=float(product_data_for_manual_form.get('efficiency_percent', 0.0)),step=0.01,format="%.2f", key=f"{form_key_manual_prod_ui}_eff_inv_man")
+                p_power_kw_val = st.number_input(label=get_text_local("inverter_power_kw_label","Nennleistung AC (kW)"), min_value=0.0, value=_safe_float(product_data_for_manual_form.get('power_kw', 0.0)), step=0.1, key=f"{form_key_manual_prod_ui}_power_kw_inv_man")
+                p_efficiency_percent_val = st.number_input(label=get_text_local("inverter_max_efficiency_percent_label","Max. Wirkungsgrad (%)"), min_value=0.0,max_value=100.0, value=_safe_float(product_data_for_manual_form.get('efficiency_percent', 0.0)),step=0.01,format="%.2f", key=f"{form_key_manual_prod_ui}_eff_inv_man")
             elif p_category_form == 'Batteriespeicher':
-                p_storage_power_kw_val = st.number_input(label=get_text_local("storage_usable_storage_power_kw_label","Nutzbare Kapazität (kWh)"),min_value=0.0,value=float(product_data_for_manual_form.get('storage_power_kw', 0.0)),step=0.1, key=f"{form_key_manual_prod_ui}_storage_cap_man")
-                p_power_kw_val = st.number_input(label=get_text_local("storage_max_charge_discharge_storage_power_kw_label","Max. Lade-/Entladeleistung (kW)"),min_value=0.0,value=float(product_data_for_manual_form.get('power_kw', 0.0)),step=0.1, key=f"{form_key_manual_prod_ui}_storage_power_man")
-                p_max_cycles_val = st.number_input(label=get_text_local("storage_max_cycles_manufacturer_label","Zyklen (Herstellerangabe)"),min_value=0,value=int(product_data_for_manual_form.get('max_cycles',0)),step=100, key=f"{form_key_manual_prod_ui}_max_cycles_man")
+                p_storage_power_kw_val = st.number_input(label=get_text_local("storage_usable_storage_power_kw_label","Nutzbare Kapazität (kWh)"),min_value=0.0,value=_safe_float(product_data_for_manual_form.get('storage_power_kw', 0.0)),step=0.1, key=f"{form_key_manual_prod_ui}_storage_cap_man")
+                p_power_kw_val = st.number_input(label=get_text_local("storage_max_charge_discharge_storage_power_kw_label","Max. Lade-/Entladeleistung (kW)"),min_value=0.0,value=_safe_float(product_data_for_manual_form.get('power_kw', 0.0)),step=0.1, key=f"{form_key_manual_prod_ui}_storage_power_man")
+                p_max_cycles_val = st.number_input(label=get_text_local("storage_max_cycles_manufacturer_label","Zyklen (Herstellerangabe)"),min_value=0,value=_safe_int(product_data_for_manual_form.get('max_cycles',0)),step=100, key=f"{form_key_manual_prod_ui}_max_cycles_man")
             
             p_description_form_val = st.text_area(get_text_local("product_description_label","Beschreibung"), value=product_data_for_manual_form.get('description', ''), height=100, key=f"{form_key_manual_prod_ui}_desc_man")
             form_manual_submit_label_dyn = get_text_local("admin_save_product_button_manual", "Änderungen speichern") if st.session_state.product_to_edit_id_manual else get_text_local("admin_add_product_button_manual", "Produkt anlegen")
