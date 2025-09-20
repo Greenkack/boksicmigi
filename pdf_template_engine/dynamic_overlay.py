@@ -350,6 +350,9 @@ def generate_overlay(coords_dir: Path, dynamic_data: Dict[str, str], total_pages
         # Seite 4 Produktbilder
         if i == 4:
             _draw_page4_component_images(c, dynamic_data, page_width, page_height)
+            # Hersteller-Brand-Logos (nach Produktbildern, vor Textlayer optional)
+            # Logos werden später auch nach dem Text gerendert um Überdeckung sicherzustellen
+
 
     	# Keys für horizontale Zentrierung innerhalb Box
         # Keys für horizontale Zentrierung innerhalb Box
@@ -568,6 +571,13 @@ def generate_overlay(coords_dir: Path, dynamic_data: Dict[str, str], total_pages
                     c.drawString(x0, draw_y, str(val))
             finally:
                 c.restoreState()
+
+        # Seite 4: Hersteller-Logos nach den Texten zeichnen (damit sie oben liegen)
+        if i == 4:
+            try:
+                _draw_page4_brand_logos(c, dynamic_data, page_width, page_height)
+            except Exception as e:
+                print(f"WARN: Fehler beim Zeichnen der Hersteller-Logos Seite4: {e}")
 
         c.showPage()
     c.save()
@@ -819,6 +829,92 @@ def _draw_page4_component_images(c: canvas.Canvas, dynamic_data: Dict[str, str],
                 c.restoreState()
     except Exception:
         return
+
+
+def _draw_page4_brand_logos(c: canvas.Canvas, dynamic_data: Dict[str, str], page_width: float, page_height: float) -> None:
+    """Zeichnet Hersteller-Logos (Module / WR / Speicher) auf Seite 4 rechts neben den Überschriften.
+
+    Verwendet Admin-Setting 'pdf_logo_positions' (Struktur wie DEFAULT_POSITIONS in admin_logo_positions_ui.py):
+    {
+        "modul": {"x": 520, "y": 180, "width": 60, "height": 30},
+        "wechselrichter": {"x": 520, "y": 370, ...},
+        "batteriespeicher": {"x": 520, "y": 560, ...}
+    }
+
+    Koordinatensystem (Admin-UI): X links->rechts, Y unten->oben.
+    ReportLab Canvas: Ursprung links unten. Deshalb direkte Verwendung möglich.
+    """
+    try:
+        # Logos aus dynamic_data
+        logo_keys = {
+            "modul": "module_brand_logo_b64",
+            "wechselrichter": "inverter_brand_logo_b64",
+            "batteriespeicher": "storage_brand_logo_b64",
+        }
+
+        # Admin-Positionen laden (Fallback auf Defaults falls Setting fehlt)
+        default_positions = {
+            "modul": {"x": 520.0, "y": 180.0, "width": 60.0, "height": 30.0},
+            "wechselrichter": {"x": 520.0, "y": 370.0, "width": 60.0, "height": 30.0},
+            "batteriespeicher": {"x": 520.0, "y": 560.0, "width": 60.0, "height": 30.0},
+        }
+        try:
+            positions = load_admin_setting("pdf_logo_positions", default_positions) or default_positions
+            if not isinstance(positions, dict):
+                positions = default_positions
+        except Exception:
+            positions = default_positions
+
+        # Zeichnen
+        for category, key in logo_keys.items():
+            b64 = dynamic_data.get(key)
+            if not b64:
+                continue
+            img = _as_image_reader(b64)
+            if img is None:
+                continue
+            pos = positions.get(category, {})
+            x = float(pos.get("x", default_positions[category]["x"]))
+            y_bottom = float(pos.get("y", default_positions[category]["y"]))
+            box_w = float(pos.get("width", default_positions[category]["width"]))
+            box_h = float(pos.get("height", default_positions[category]["height"]))
+
+            # Optional: 2cm vom rechten Rand erzwingen falls Admin-x sehr weit links (< rechte Rand - 2cm)
+            # 2 cm ≈ 56.7 pt. Rechter Rand (A4 width ~595). Ziel-x = 595 - 56.7 - box_w
+            try:
+                enforce_margin = load_admin_setting("pdf_logo_right_margin_enforce", True)
+            except Exception:
+                enforce_margin = True
+            if enforce_margin:
+                right_margin_cm = 2.0
+                right_margin_pt = right_margin_cm * 28.3465
+                desired_x = page_width - right_margin_pt - box_w
+                if x > desired_x + 40:  # Falls Admin versehentlich zu weit rechts (überlappt Rand), korrigieren
+                    x = desired_x
+                elif x < desired_x - 120:  # Wenn weit links, orientieren wir uns an gewünschter Margin-Position
+                    x = desired_x
+
+            # Bildgröße an Box anpassen (Aspect Ratio beibehalten)
+            try:
+                iw, ih = img.getSize()  # type: ignore
+                scale = min(box_w / iw, box_h / ih)
+                dw, dh = iw * scale, ih * scale
+            except Exception:
+                dw, dh = box_w, box_h
+            # Vertikal mittig innerhalb Box (Admin y = untere Kante)
+            y = y_bottom
+            if dh < box_h:
+                y = y_bottom + (box_h - dh) / 2.0
+
+            c.saveState()
+            try:
+                c.drawImage(img, x, y, width=dw, height=dh, preserveAspectRatio=True, mask='auto')
+            except Exception as e:
+                print(f"Fehler beim Zeichnen Logo {category}: {e}")
+            finally:
+                c.restoreState()
+    except Exception as e:
+        print(f"Fehler _draw_page4_brand_logos: {e}")
 
 
 def _remove_text_from_page(page, texts_to_remove: list[str]):
