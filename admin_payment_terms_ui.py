@@ -6,7 +6,7 @@ Erweiterte Benutzeroberfläche für Administratoren zur umfassenden Konfiguratio
 der Zahlungsmodalitäten. Das Modul bietet:
 
 1. Verwaltung verschiedener Zahlungsoptionen (Bar, Raten, Finanzierung)
-2. Konfiguration von Rabatten und Konditionen
+2. Konfiguration von 4 spezifischen Zahlungsvarianten
 3. Bearbeitung rechtlicher Texte und Bedingungen
 4. Vorschau der konfigurierten Zahlungsmodalitäten
 5. Import/Export von Zahlungskonfigurationen
@@ -16,7 +16,7 @@ Tabs/Expander zur übersichtlichen Darstellung. Die Einstellungen werden
 dauerhaft in der Admin‑Datenbank gespeichert.
 
 Autor: System Integration für erweiterte Zahlungsmodalitäten
-Version: 2.0 - Vollständig überarbeitet für umfassende Funktionalität
+Version: 3.0 - Erweitert um spezifische Zahlungsvarianten mit Platzhaltern
 """
 
 import streamlit as st
@@ -39,6 +39,121 @@ except ImportError:
     def save_payment_terms_config(config):
         return False
     PAYMENT_TERMS_AVAILABLE = False
+
+
+def get_default_payment_variants() -> Dict[str, Any]:
+    """Standard-Konfiguration für die 4 spezifischen Zahlungsvarianten."""
+    return {
+        "variant_1": {
+            "name": "Variante 1 (Anzahlung/Raten)",
+            "description": "Mit Anzahlung und gestaffelten Raten",
+            "enabled": True,
+            "percents": [30.0, 50.0, 20.0],
+            "percent_labels": ["Anzahlung (%)", "Nach DC-Montage (%)", "Nach Inbetriebnahme (%)"],
+            "amounts": [0.0, 0.0, 0.0],  # Optional feste Beträge
+            "amount_labels": ["Betrag Anzahlung (€)", "Betrag nach DC-Montage (€)", "Betrag nach Inbetriebnahme (€)"],
+            "text_template": "Anzahlung {p1}% ({b1} €) der Auftragssumme, {p2}% ({b2} €) nach DC-Montage, {p3}% ({b3} €) nach Inbetriebnahme.",
+            "validation_rule": "sum_100_percent"
+        },
+        "variant_2": {
+            "name": "Variante 2 (100% nach Fertigstellung)",
+            "description": "Komplette Zahlung nach Lieferung/Installation/Inbetriebnahme",
+            "enabled": True,
+            "percents": [100.0, 0.0, 0.0],
+            "percent_labels": ["Nach Fertigstellung (%)", "", ""],
+            "amounts": [0.0, 0.0, 0.0],
+            "amount_labels": ["Betrag nach Fertigstellung (€)", "", ""],
+            "text_template": "Zahlungsbedingungen: {p1}% ({b1} €) des Gesamtbetrags nach erfolgter Installation und Inbetriebnahme.",
+            "is_static": True,  # Prozente können nicht geändert werden
+            "validation_rule": "static_100_percent"
+        },
+        "variant_3": {
+            "name": "Variante 3 (ohne Anzahlung - zwei Raten)",
+            "description": "Zahlung in zwei Raten ohne Anzahlung",
+            "enabled": True,
+            "percents": [60.0, 40.0, 0.0],
+            "percent_labels": ["Nach DC-Montage/Lieferung (%)", "Nach Inbetriebnahme (%)", ""],
+            "amounts": [0.0, 0.0, 0.0],
+            "amount_labels": ["Betrag nach DC-Montage (€)", "Betrag nach Inbetriebnahme (€)", ""],
+            "text_template": "{p1}% ({b1} €) nach DC-Montage/Lieferung, {p2}% ({b2} €) nach Inbetriebnahme.",
+            "validation_rule": "sum_100_percent_two_rates"
+        },
+        "variant_4": {
+            "name": "Variante 4 (komplett individuell)",
+            "description": "Drei konfigurierbare Felder für individuelle Teilzahlungen",
+            "enabled": True,
+            "percents": [33.33, 33.33, 33.34],
+            "percent_labels": ["Rate 1 (%)", "Rate 2 (%)", "Rate 3 (%)"],
+            "amounts": [0.0, 0.0, 0.0],
+            "amount_labels": ["Betrag Rate 1 (€)", "Betrag Rate 2 (€)", "Betrag Rate 3 (€)"],
+            "custom_labels": ["Rate 1", "Rate 2", "Rate 3"],  # Anpassbare Bezeichnungen
+            "text_template": "{label1}: {p1}% ({b1} €), {label2}: {p2}% ({b2} €), {label3}: {p3}% ({b3} €).",
+            "validation_rule": "sum_100_percent",
+            "is_fully_customizable": True
+        }
+    }
+
+
+def validate_payment_variant_percentages(variant_data: Dict[str, Any]) -> tuple[bool, str]:
+    """Validiert die Prozentwerte einer Zahlungsvariante."""
+    percents = variant_data.get("percents", [])
+    validation_rule = variant_data.get("validation_rule", "sum_100_percent")
+    
+    if validation_rule == "static_100_percent":
+        return True, "OK"  # Statische Variante ist immer valide
+    
+    elif validation_rule == "sum_100_percent_two_rates":
+        if len(percents) >= 2:
+            sum_percent = percents[0] + percents[1]
+            if abs(sum_percent - 100.0) < 0.01:
+                return True, "OK"
+            else:
+                return False, f"Summe der beiden Raten muss 100% sein (aktuell: {sum_percent:.1f}%)"
+        return False, "Mindestens zwei Prozentangaben erforderlich"
+    
+    elif validation_rule == "sum_100_percent":
+        sum_percent = sum(p for p in percents if p > 0)
+        if abs(sum_percent - 100.0) < 0.01:
+            return True, "OK"
+        else:
+            return False, f"Summe aller Prozentangaben muss 100% sein (aktuell: {sum_percent:.1f}%)"
+    
+    return False, "Unbekannte Validierungsregel"
+
+
+def format_payment_text_with_placeholders(
+    text_template: str, 
+    percents: List[float], 
+    amounts: List[float], 
+    total_amount: float = 10000.0,
+    custom_labels: Optional[List[str]] = None
+) -> str:
+    """Ersetzt Platzhalter in Zahlungstext-Vorlagen."""
+    
+    # Beträge berechnen falls nicht explizit gesetzt
+    calculated_amounts = []
+    for i, (percent, fixed_amount) in enumerate(zip(percents, amounts)):
+        if fixed_amount > 0:
+            calculated_amounts.append(fixed_amount)
+        else:
+            calculated_amounts.append(round(percent / 100.0 * total_amount, 2))
+    
+    # Standard-Platzhalter ersetzen
+    replacements = {}
+    for i in range(3):
+        replacements[f"p{i+1}"] = percents[i] if i < len(percents) else 0.0
+        replacements[f"b{i+1}"] = calculated_amounts[i] if i < len(calculated_amounts) else 0.0
+    
+    # Custom Labels für Variante 4
+    if custom_labels:
+        for i, label in enumerate(custom_labels):
+            if i < 3:
+                replacements[f"label{i+1}"] = label
+    
+    try:
+        return text_template.format(**replacements)
+    except KeyError as e:
+        return f"Fehler in Textvorlage: Unbekannter Platzhalter {e}"
 
 
 
@@ -1421,6 +1536,660 @@ def render_comprehensive_admin_payment_terms_ui(
                 else:
                     st.error("❌ Fehler beim Zurücksetzen.")
             else:
+                st.session_state[f"confirm_reset{widget_key_suffix}"] = True
+                st.warning("⚠️ Klicken Sie erneut zum Bestätigen.")
+
+
+def render_dynamic_payment_variants_ui(
+    load_admin_setting_func: Callable[[str, Any], Any],
+    save_admin_setting_func: Callable[[str, Any], bool],
+    widget_key_suffix: str = ""
+):
+    """
+    Erweiterte UI für die Konfiguration der 4 spezifischen Zahlungsvarianten
+    mit konfigurierbaren Prozentsätzen, optionalen festen Beträgen und Textbausteinen.
+    """
+    
+    st.title("💳 Dynamische Zahlungsmodalitäten konfigurieren")
+    st.markdown("---")
+    st.markdown("""
+    **Konfigurieren Sie bis zu 4 verschiedene Zahlungsvarianten mit:**
+    - ✅ Konfigurierbaren Prozentsätzen und optionalen festen Beträgen
+    - ✅ Anpassbaren Textbausteinen mit Platzhaltern ({p1}, {p2}, {p3}, {b1}, {b2}, {b3})
+    - ✅ Automatischer Validierung (Summe muss 100% ergeben)
+    - ✅ Vorschau mit Beispielbeträgen
+    """)
+    
+    # Lade aktuelle Konfiguration
+    current_variants = load_admin_setting_func('dynamic_payment_variants', get_default_payment_variants())
+    if not isinstance(current_variants, dict):
+        current_variants = get_default_payment_variants()
+    
+    # Globale Einstellungen
+    st.subheader("🔧 Globale Einstellungen")
+    col_global1, col_global2 = st.columns(2)
+    
+    with col_global1:
+        example_total = st.number_input(
+            "Beispiel-Gesamtbetrag für Vorschau (€):",
+            min_value=1000.0,
+            max_value=100000.0,
+            value=15000.0,
+            step=1000.0,
+            key=f"example_total{widget_key_suffix}"
+        )
+    
+    with col_global2:
+        show_amounts_in_text = st.checkbox(
+            "Beträge in Zahlungstext anzeigen",
+            value=True,
+            help="Wenn aktiviert, werden neben Prozenten auch die berechneten Beträge angezeigt",
+            key=f"show_amounts{widget_key_suffix}"
+        )
+    
+    st.markdown("---")
+    
+    # Tab-Layout für die 4 Varianten
+    variant_tabs = st.tabs([
+        "🎯 Variante 1 (Anzahlung)", 
+        "💯 Variante 2 (100% Fertigstellung)", 
+        "📊 Variante 3 (2 Raten)", 
+        "⚙️ Variante 4 (Individuell)"
+    ])
+    
+    variant_keys = ["variant_1", "variant_2", "variant_3", "variant_4"]
+    updated_variants = current_variants.copy()
+    
+    for tab_idx, (tab, variant_key) in enumerate(zip(variant_tabs, variant_keys)):
+        with tab:
+            variant_data = current_variants.get(variant_key, get_default_payment_variants()[variant_key])
+            
+            st.subheader(f"📝 {variant_data['name']}")
+            st.caption(variant_data['description'])
+            
+            # Grundeinstellungen
+            col_basic1, col_basic2 = st.columns([2, 1])
+            
+            with col_basic1:
+                variant_name = st.text_input(
+                    "Bezeichnung der Variante:",
+                    value=variant_data.get('name', ''),
+                    key=f"variant_{variant_key}_name{widget_key_suffix}"
+                )
+                
+                variant_description = st.text_input(
+                    "Beschreibung:",
+                    value=variant_data.get('description', ''),
+                    key=f"variant_{variant_key}_desc{widget_key_suffix}"
+                )
+            
+            with col_basic2:
+                variant_enabled = st.checkbox(
+                    "Variante aktiviert",
+                    value=variant_data.get('enabled', True),
+                    key=f"variant_{variant_key}_enabled{widget_key_suffix}"
+                )
+            
+            # Prozentsätze konfigurieren
+            st.markdown("**💯 Prozentuale Aufteilung:**")
+            
+            is_static = variant_data.get('is_static', False)
+            is_fully_customizable = variant_data.get('is_fully_customizable', False)
+            
+            percents = variant_data.get('percents', [0.0, 0.0, 0.0])
+            percent_labels = variant_data.get('percent_labels', ['Rate 1 (%)', 'Rate 2 (%)', 'Rate 3 (%)'])
+            
+            new_percents = []
+            custom_labels = variant_data.get('custom_labels', ['Rate 1', 'Rate 2', 'Rate 3'])
+            new_custom_labels = []
+            
+            # Spezielle Behandlung für Variante 4 (vollständig anpassbar)
+            if is_fully_customizable:
+                st.info("💡 Diese Variante ist vollständig anpassbar - Sie können sowohl Bezeichnungen als auch Prozentsätze frei konfigurieren.")
+                
+                for i in range(3):
+                    col_label, col_percent = st.columns([1, 1])
+                    
+                    with col_label:
+                        custom_label = st.text_input(
+                            f"Bezeichnung Rate {i+1}:",
+                            value=custom_labels[i] if i < len(custom_labels) else f"Rate {i+1}",
+                            key=f"variant_{variant_key}_label_{i}{widget_key_suffix}"
+                        )
+                        new_custom_labels.append(custom_label)
+                    
+                    with col_percent:
+                        percent_val = st.number_input(
+                            f"{custom_label} (%):",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=percents[i] if i < len(percents) else 0.0,
+                            step=0.1,
+                            key=f"variant_{variant_key}_percent_{i}{widget_key_suffix}"
+                        )
+                        new_percents.append(percent_val)
+            
+            elif is_static:
+                st.info("💡 Diese Variante hat feste Prozentsätze und kann nicht geändert werden.")
+                new_percents = [100.0, 0.0, 0.0]
+                st.metric("Nach Fertigstellung", "100%")
+                
+            else:
+                # Standard-Prozentsatz-Eingabe
+                cols = st.columns(3)
+                for i in range(3):
+                    if percent_labels[i]:  # Nur wenn Label vorhanden
+                        with cols[i]:
+                            percent_val = st.number_input(
+                                percent_labels[i],
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=percents[i] if i < len(percents) else 0.0,
+                                step=0.1,
+                                key=f"variant_{variant_key}_percent_{i}{widget_key_suffix}"
+                            )
+                            new_percents.append(percent_val)
+                    else:
+                        new_percents.append(0.0)
+            
+            # Validierung anzeigen
+            variant_data_temp = variant_data.copy()
+            variant_data_temp['percents'] = new_percents
+            is_valid, validation_msg = validate_payment_variant_percentages(variant_data_temp)
+            
+            if is_valid:
+                st.success(f"✅ {validation_msg}")
+            else:
+                st.error(f"❌ {validation_msg}")
+            
+            # Optionale feste Beträge
+            with st.expander("💰 Feste Beträge (optional)", expanded=False):
+                st.caption("Lassen Sie die Felder bei 0, um automatisch aus Prozentsätzen zu berechnen.")
+                
+                amounts = variant_data.get('amounts', [0.0, 0.0, 0.0])
+                amount_labels = variant_data.get('amount_labels', ['Betrag 1 (€)', 'Betrag 2 (€)', 'Betrag 3 (€)'])
+                new_amounts = []
+                
+                cols_amounts = st.columns(3)
+                for i in range(3):
+                    if amount_labels[i]:  # Nur wenn Label vorhanden
+                        with cols_amounts[i]:
+                            amount_val = st.number_input(
+                                amount_labels[i],
+                                min_value=0.0,
+                                max_value=100000.0,
+                                value=amounts[i] if i < len(amounts) else 0.0,
+                                step=50.0,
+                                key=f"variant_{variant_key}_amount_{i}{widget_key_suffix}"
+                            )
+                            new_amounts.append(amount_val)
+                    else:
+                        new_amounts.append(0.0)
+            
+            # Textbaustein konfigurieren
+            st.markdown("**📝 Textbaustein für PDF:**")
+            st.caption("Verfügbare Platzhalter: {p1}, {p2}, {p3} (Prozente), {b1}, {b2}, {b3} (Beträge)")
+            if is_fully_customizable:
+                st.caption("Zusätzlich: {label1}, {label2}, {label3} (Ihre benutzerdefinierten Bezeichnungen)")
+            
+            text_template = st.text_area(
+                "Textvorlage:",
+                value=variant_data.get('text_template', ''),
+                height=100,
+                help="Verwenden Sie Platzhalter wie {p1} für Prozente und {b1} für Beträge",
+                key=f"variant_{variant_key}_text{widget_key_suffix}"
+            )
+            
+            # Vorschau generieren
+            st.markdown("**👁️ Vorschau:**")
+            try:
+                preview_text = format_payment_text_with_placeholders(
+                    text_template, 
+                    new_percents, 
+                    new_amounts, 
+                    example_total,
+                    new_custom_labels if is_fully_customizable else None
+                )
+                
+                if show_amounts_in_text:
+                    st.info(f"📄 **Vorschau-Text:** {preview_text}")
+                else:
+                    # Text ohne Beträge anzeigen
+                    preview_no_amounts = format_payment_text_with_placeholders(
+                        text_template.replace('({b1} €)', '').replace('({b2} €)', '').replace('({b3} €)', ''),
+                        new_percents, 
+                        [0.0, 0.0, 0.0],  # Keine Beträge
+                        example_total,
+                        new_custom_labels if is_fully_customizable else None
+                    )
+                    st.info(f"📄 **Vorschau-Text:** {preview_no_amounts}")
+                
+            except Exception as e:
+                st.error(f"❌ Fehler in Textvorlage: {str(e)}")
+            
+            # Aktualisierte Variante speichern
+            updated_variant = variant_data.copy()
+            updated_variant.update({
+                'name': variant_name,
+                'description': variant_description,
+                'enabled': variant_enabled,
+                'percents': new_percents,
+                'amounts': new_amounts,
+                'text_template': text_template
+            })
+            
+            if is_fully_customizable:
+                updated_variant['custom_labels'] = new_custom_labels
+            
+            updated_variants[variant_key] = updated_variant
+    
+    # Speichern und Aktionen
+    st.markdown("---")
+    st.subheader("💾 Aktionen")
+    
+    col_save1, col_save2, col_save3 = st.columns(3)
+    
+    with col_save1:
+        if st.button("💾 Zahlungsvarianten speichern", key=f"save_variants{widget_key_suffix}", type="primary"):
+            try:
+                # Validierung aller Varianten
+                all_valid = True
+                validation_errors = []
+                
+                for variant_key, variant_data in updated_variants.items():
+                    if variant_data.get('enabled', False):
+                        is_valid, validation_msg = validate_payment_variant_percentages(variant_data)
+                        if not is_valid:
+                            all_valid = False
+                            validation_errors.append(f"{variant_data['name']}: {validation_msg}")
+                
+                if not all_valid:
+                    st.error("❌ Validierungsfehler gefunden:")
+                    for error in validation_errors:
+                        st.error(f"• {error}")
+                else:
+                    if save_admin_setting_func('dynamic_payment_variants', updated_variants):
+                        st.success("✅ Zahlungsvarianten erfolgreich gespeichert!")
+                        st.balloons()
+                    else:
+                        st.error("❌ Fehler beim Speichern der Zahlungsvarianten.")
+                        
+            except Exception as e:
+                st.error(f"❌ Fehler beim Speichern: {str(e)}")
+    
+    with col_save2:
+        if st.button("🔄 Auf Standard zurücksetzen", key=f"reset_variants{widget_key_suffix}"):
+            if st.session_state.get(f"confirm_reset_variants{widget_key_suffix}", False):
+                default_variants = get_default_payment_variants()
+                if save_admin_setting_func('dynamic_payment_variants', default_variants):
+                    st.success("✅ Auf Standardwerte zurückgesetzt!")
+                    st.session_state[f"confirm_reset_variants{widget_key_suffix}"] = False
+                    st.rerun()
+                else:
+                    st.error("❌ Fehler beim Zurücksetzen.")
+            else:
+                st.session_state[f"confirm_reset_variants{widget_key_suffix}"] = True
+                st.warning("⚠️ Klicken Sie erneut zum Bestätigen.")
+    
+    with col_save3:
+        if st.button("📊 Alle Varianten testen", key=f"test_variants{widget_key_suffix}"):
+            st.markdown("### 🧪 Test aller Zahlungsvarianten")
+            for variant_key, variant_data in updated_variants.items():
+                if variant_data.get('enabled', False):
+                    st.markdown(f"**{variant_data['name']}:**")
+                    try:
+                        test_text = format_payment_text_with_placeholders(
+                            variant_data.get('text_template', ''),
+                            variant_data.get('percents', []),
+                            variant_data.get('amounts', []),
+                            example_total,
+                            variant_data.get('custom_labels')
+                        )
+                        st.success(f"✅ {test_text}")
+                    except Exception as e:
+                        st.error(f"❌ Fehler: {str(e)}")
+                else:
+                    st.info(f"ℹ️ {variant_data['name']}: Deaktiviert")
+
+
+# Hauptfunktion, die beide Systeme kombiniert
+def render_comprehensive_admin_payment_terms_ui_with_variants(
+    load_admin_setting_func: Callable[[str, Any], Any],
+    save_admin_setting_func: Callable[[str, Any], bool],
+    widget_key_suffix: str = ""
+):
+    """
+    Kombinierte UI für sowohl das umfassende Zahlungsmodalitäten-System 
+    als auch die neuen dynamischen Zahlungsvarianten.
+    """
+    
+    st.title("💳 Erweiterte Zahlungsmodalitäten-Verwaltung")
+    
+    # Haupttabs
+    main_tab1, main_tab2 = st.tabs([
+        "💼 Umfassende Zahlungsoptionen",
+        "🎯 Dynamische Zahlungsvarianten"
+    ])
+    
+    with main_tab1:
+        render_comprehensive_admin_payment_terms_ui(
+            load_admin_setting_func, 
+            save_admin_setting_func, 
+            widget_key_suffix
+        )
+    
+    with main_tab2:
+        render_dynamic_payment_variants_ui(
+            load_admin_setting_func,
+            save_admin_setting_func,
+            widget_key_suffix
+        )
+
+
+# ==========================================
+# BENUTZER-AUSWAHL-KOMPONENTE FÜR PDF-ERSTELLUNG
+# ==========================================
+
+def render_payment_variant_selector_for_pdf(
+    load_admin_setting_func: Callable[[str, Any], Any],
+    widget_key_suffix: str = "",
+    example_total: float = 15000.0
+) -> Optional[Dict[str, Any]]:
+    """
+    Benutzer-Auswahl-Komponente für Zahlungsvarianten im PDF-Erstellungsbereich.
+    
+    Args:
+        load_admin_setting_func: Funktion zum Laden der Admin-Einstellungen
+        widget_key_suffix: Suffix für eindeutige Widget-Keys
+        example_total: Beispielbetrag für die Vorschau
+        
+    Returns:
+        Dict mit ausgewählter Zahlungsvariante oder None wenn keine ausgewählt
+    """
+    
+    # Lade konfigurierte Zahlungsvarianten
+    configured_variants = load_admin_setting_func('dynamic_payment_variants', get_default_payment_variants())
+    if not isinstance(configured_variants, dict):
+        configured_variants = get_default_payment_variants()
+    
+    # Nur aktivierte Varianten anzeigen
+    active_variants = {
+        key: variant for key, variant in configured_variants.items() 
+        if variant.get('enabled', True)
+    }
+    
+    if not active_variants:
+        st.warning("⚠️ Keine Zahlungsvarianten konfiguriert. Bitte konfigurieren Sie zuerst die Zahlungsmodalitäten im Admin-Bereich.")
+        return None
+    
+    st.markdown("### 💳 Zahlungsmodalitäten für PDF")
+    st.caption("Wählen Sie die gewünschte Zahlungsvariante für dieses Angebot:")
+    
+    # Varianten als Liste für Selectbox vorbereiten
+    variant_options = []
+    variant_mapping = {}
+    
+    for key, variant in active_variants.items():
+        display_name = f"{variant['name']} - {variant['description'][:50]}..."
+        variant_options.append(display_name)
+        variant_mapping[display_name] = (key, variant)
+    
+    # Auswahl-Widget
+    col_select, col_preview = st.columns([2, 1])
+    
+    with col_select:
+        selected_display = st.selectbox(
+            "Zahlungsvariante auswählen:",
+            options=variant_options,
+            index=0,
+            key=f"payment_variant_selector{widget_key_suffix}",
+            help="Diese Zahlungsmodalität wird auf Seite 7 des PDFs angezeigt"
+        )
+        
+        selected_key, selected_variant = variant_mapping[selected_display]
+        
+        # Zusätzliche Optionen
+        show_detailed_breakdown = st.checkbox(
+            "📊 Detaillierte Aufschlüsselung im PDF anzeigen",
+            value=True,
+            key=f"payment_detailed_breakdown{widget_key_suffix}",
+            help="Zeigt eine tabellarische Aufschlüsselung der Zahlungsraten"
+        )
+        
+        include_amounts_in_text = st.checkbox(
+            "💰 Beträge im Zahlungstext anzeigen",
+            value=True,
+            key=f"payment_include_amounts{widget_key_suffix}",
+            help="Fügt die berechneten Euro-Beträge neben den Prozentsätzen hinzu"
+        )
+    
+    with col_preview:
+        st.markdown("**👁️ Vorschau:**")
+        
+        # Vorschau-Text generieren
+        try:
+            preview_text = format_payment_text_with_placeholders(
+                selected_variant.get('text_template', ''),
+                selected_variant.get('percents', []),
+                selected_variant.get('amounts', []),
+                example_total,
+                selected_variant.get('custom_labels')
+            )
+            
+            if not include_amounts_in_text:
+                # Beträge aus Vorschau entfernen
+                preview_text = format_payment_text_with_placeholders(
+                    selected_variant.get('text_template', '').replace('({b1} €)', '').replace('({b2} €)', '').replace('({b3} €)', ''),
+                    selected_variant.get('percents', []),
+                    [0.0, 0.0, 0.0],
+                    example_total,
+                    selected_variant.get('custom_labels')
+                )
+            
+            st.info(f"📝 {preview_text}")
+            
+        except Exception as e:
+            st.error(f"❌ Fehler in Vorschau: {str(e)}")
+        
+        # Prozentuale Aufschlüsselung anzeigen
+        percents = selected_variant.get('percents', [])
+        amounts = selected_variant.get('amounts', [])
+        custom_labels = selected_variant.get('custom_labels', ['Rate 1', 'Rate 2', 'Rate 3'])
+        
+        st.markdown("**📊 Aufschlüsselung:**")
+        for i, percent in enumerate(percents):
+            if percent > 0:
+                # Berechne Betrag
+                if amounts and len(amounts) > i and amounts[i] > 0:
+                    calculated_amount = amounts[i]
+                else:
+                    calculated_amount = (example_total * percent) / 100
+                
+                label = custom_labels[i] if i < len(custom_labels) else f"Rate {i+1}"
+                st.metric(
+                    label=label,
+                    value=f"{percent}%",
+                    delta=f"{calculated_amount:,.2f} €"
+                )
+    
+    # Rückgabe-Daten zusammenstellen
+    return {
+        'variant_key': selected_key,
+        'variant_data': selected_variant,
+        'display_name': selected_variant['name'],
+        'show_detailed_breakdown': show_detailed_breakdown,
+        'include_amounts_in_text': include_amounts_in_text,
+        'preview_text': preview_text if 'preview_text' in locals() else '',
+        'example_total': example_total
+    }
+
+
+def render_payment_variant_compact_selector(
+    load_admin_setting_func: Callable[[str, Any], Any],
+    widget_key_suffix: str = "",
+    show_preview: bool = True
+) -> Optional[str]:
+    """
+    Kompakte Zahlungsvarianten-Auswahl für Integration in bestehende UI-Bereiche.
+    
+    Args:
+        load_admin_setting_func: Funktion zum Laden der Admin-Einstellungen  
+        widget_key_suffix: Suffix für eindeutige Widget-Keys
+        show_preview: Ob eine Vorschau angezeigt werden soll
+        
+    Returns:
+        Key der ausgewählten Zahlungsvariante oder None
+    """
+    
+    # Lade konfigurierte Zahlungsvarianten
+    configured_variants = load_admin_setting_func('dynamic_payment_variants', get_default_payment_variants())
+    if not isinstance(configured_variants, dict):
+        configured_variants = get_default_payment_variants()
+    
+    # Nur aktivierte Varianten anzeigen
+    active_variants = {
+        key: variant for key, variant in configured_variants.items() 
+        if variant.get('enabled', True)
+    }
+    
+    if not active_variants:
+        st.info("ℹ️ Keine Zahlungsvarianten konfiguriert.")
+        return None
+    
+    # Varianten als Liste für Selectbox vorbereiten  
+    variant_options = ["Keine Zahlungsmodalitäten im PDF"]
+    variant_mapping = {"Keine Zahlungsmodalitäten im PDF": None}
+    
+    for key, variant in active_variants.items():
+        display_name = variant['name']
+        variant_options.append(display_name)
+        variant_mapping[display_name] = key
+    
+    # Kompakte Auswahl
+    selected_display = st.selectbox(
+        "💳 Zahlungsmodalitäten:",
+        options=variant_options,
+        index=1 if len(variant_options) > 1 else 0,
+        key=f"payment_variant_compact{widget_key_suffix}",
+        help="Zahlungsmodalitäten für PDF (wird auf Seite 7 eingefügt)"
+    )
+    
+    selected_key = variant_mapping[selected_display]
+    
+    # Optionale Vorschau
+    if show_preview and selected_key:
+        selected_variant = active_variants[selected_key]
+        
+        with st.expander("👁️ Vorschau der Zahlungsmodalitäten", expanded=False):
+            try:
+                preview_text = format_payment_text_with_placeholders(
+                    selected_variant.get('text_template', ''),
+                    selected_variant.get('percents', []),
+                    selected_variant.get('amounts', []),
+                    15000.0,  # Standard-Beispielbetrag
+                    selected_variant.get('custom_labels')
+                )
+                
+                st.info(f"📝 **Beispiel-Text:** {preview_text}")
+                
+                # Kurze Übersicht der Raten
+                percents = selected_variant.get('percents', [])
+                if any(p > 0 for p in percents):
+                    rate_info = []
+                    custom_labels = selected_variant.get('custom_labels', ['Rate 1', 'Rate 2', 'Rate 3'])
+                    
+                    for i, percent in enumerate(percents):
+                        if percent > 0:
+                            label = custom_labels[i] if i < len(custom_labels) else f"Rate {i+1}"
+                            rate_info.append(f"{label}: {percent}%")
+                    
+                    st.caption(f"💡 Aufteilung: {' | '.join(rate_info)}")
+                
+            except Exception as e:
+                st.error(f"❌ Fehler in Vorschau: {str(e)}")
+    
+    return selected_key
+
+
+def get_payment_variant_for_pdf_generation(
+    selected_variant_key: Optional[str],
+    load_admin_setting_func: Callable[[str, Any], Any],
+    project_total: float,
+    include_amounts: bool = True
+) -> Optional[Dict[str, Any]]:
+    """
+    Bereitet die ausgewählte Zahlungsvariante für die PDF-Generierung vor.
+    
+    Args:
+        selected_variant_key: Key der ausgewählten Zahlungsvariante
+        load_admin_setting_func: Funktion zum Laden der Admin-Einstellungen
+        project_total: Gesamtbetrag des Projekts
+        include_amounts: Ob Beträge in den Text einbezogen werden sollen
+        
+    Returns:
+        Dictionary mit formatierten Zahlungsdaten für PDF oder None
+    """
+    
+    if not selected_variant_key:
+        return None
+    
+    # Lade Zahlungsvarianten
+    configured_variants = load_admin_setting_func('dynamic_payment_variants', get_default_payment_variants())
+    if not isinstance(configured_variants, dict):
+        return None
+    
+    variant_data = configured_variants.get(selected_variant_key)
+    if not variant_data or not variant_data.get('enabled', True):
+        return None
+    
+    try:
+        # Formatiere Text mit aktuellen Beträgen
+        formatted_text = format_payment_text_with_placeholders(
+            variant_data.get('text_template', ''),
+            variant_data.get('percents', []),
+            variant_data.get('amounts', []) if include_amounts else [0.0, 0.0, 0.0],
+            project_total,
+            variant_data.get('custom_labels')
+        )
+        
+        # Berechne tatsächliche Beträge für jede Rate
+        percents = variant_data.get('percents', [])
+        amounts = variant_data.get('amounts', [])
+        custom_labels = variant_data.get('custom_labels', ['Rate 1', 'Rate 2', 'Rate 3'])
+        
+        payment_breakdown = []
+        for i, percent in enumerate(percents):
+            if percent > 0:
+                # Verwende festen Betrag falls definiert, sonst berechne aus Prozent
+                if amounts and len(amounts) > i and amounts[i] > 0:
+                    amount = amounts[i]
+                else:
+                    amount = (project_total * percent) / 100
+                
+                label = custom_labels[i] if i < len(custom_labels) else f"Rate {i+1}"
+                
+                payment_breakdown.append({
+                    'label': label,
+                    'percentage': percent,
+                    'amount': amount,
+                    'formatted_amount': f"{amount:,.2f} €"
+                })
+        
+        return {
+            'variant_name': variant_data['name'],
+            'variant_description': variant_data['description'],
+            'formatted_text': formatted_text,
+            'payment_breakdown': payment_breakdown,
+            'total_amount': project_total,
+            'validation_passed': True
+        }
+        
+    except Exception as e:
+        return {
+            'variant_name': variant_data.get('name', 'Unbekannt'),
+            'error': str(e),
+            'validation_passed': False
+        }
                 st.session_state[f"confirm_reset{widget_key_suffix}"] = True
                 st.warning("⚠️ Erneut klicken um zu bestätigen!")
     

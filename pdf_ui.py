@@ -466,14 +466,134 @@ def render_pdf_ui(
     #  ERWEITERTE PDF-FEATURES UI (AUSSERHALB DES FORMS)
     st.markdown("###  ERWEITERTE PDF-FEATURES")
     
-    # Feature-Tabs inkl. Drag&Drop Struktur-Manager
-    ext_tab1, ext_tab2, ext_tab3, ext_tab4, ext_tab5 = st.tabs([
+    # Feature-Tabs inkl. Drag&Drop Struktur-Manager und Zahlungsmodalitäten
+    ext_tab1, ext_tab2, ext_tab3, ext_tab4, ext_tab5, ext_tab6 = st.tabs([
         " Finanzierung",
-        " Charts",
+        " Charts", 
         " Custom Content",
         " Design",
-        " Struktur"
+        " Struktur",
+        "💳 Zahlungsmodalitäten"
     ])
+    
+    # TAB 6: ZAHLUNGSMODALITÄTEN (NEU)
+    with ext_tab6:
+        st.markdown("#### 💳 Zahlungsmodalitäten für PDF")
+        st.caption("Konfigurieren Sie die Zahlungsbedingungen, die auf Seite 7 des PDFs erscheinen sollen.")
+        
+        try:
+            # Import der Zahlungsvarianten-Komponenten
+            from admin_payment_terms_ui import (
+                render_payment_variant_compact_selector,
+                get_payment_variant_for_pdf_generation
+            )
+            
+            # Bestimme Gesamtbetrag für Berechnungen
+            project_total = 15000.0  # Default
+            try:
+                # Versuche Gesamtbetrag aus analysis_results zu extrahieren
+                if isinstance(analysis_results, dict):
+                    if 'total_cost' in analysis_results:
+                        project_total = float(analysis_results['total_cost'])
+                    elif 'gesamtkosten' in analysis_results:
+                        project_total = float(analysis_results['gesamtkosten'])
+                    elif 'anlage_total_price' in analysis_results:
+                        project_total = float(analysis_results['anlage_total_price'])
+                
+                # Alternativ aus project_data versuchen
+                if isinstance(project_data, dict) and 'total_price' in project_data:
+                    project_total = float(project_data['total_price'])
+                    
+            except (ValueError, TypeError, KeyError):
+                pass
+            
+            col_payment1, col_payment2 = st.columns([2, 1])
+            
+            with col_payment1:
+                # Kompakte Zahlungsvarianten-Auswahl
+                selected_payment_variant = render_payment_variant_compact_selector(
+                    load_admin_setting_func=load_admin_setting_func,
+                    widget_key_suffix="_pdf_ui",
+                    show_preview=True
+                )
+                
+                # Speichere Auswahl in Session State für PDF-Generierung
+                st.session_state['selected_payment_variant_key'] = selected_payment_variant
+                
+                # Zusätzliche Optionen
+                if selected_payment_variant:
+                    payment_options_col1, payment_options_col2 = st.columns(2)
+                    
+                    with payment_options_col1:
+                        include_payment_table = st.checkbox(
+                            "📊 Zahlungsplan-Tabelle im PDF",
+                            value=True,
+                            key="pdf_include_payment_table",
+                            help="Fügt eine detaillierte Tabelle mit Zahlungsraten hinzu"
+                        )
+                    
+                    with payment_options_col2:
+                        include_payment_amounts = st.checkbox(
+                            "💰 Euro-Beträge anzeigen",
+                            value=True,
+                            key="pdf_include_payment_amounts",
+                            help="Zeigt berechnete Euro-Beträge neben Prozentsätzen"
+                        )
+                    
+                    # Speichere Optionen
+                    st.session_state['payment_include_table'] = include_payment_table
+                    st.session_state['payment_include_amounts'] = include_payment_amounts
+            
+            with col_payment2:
+                st.markdown("**ℹ️ Info:**")
+                st.info(f"""
+                **Projektbetrag:** {project_total:,.2f} €
+                
+                **Position im PDF:** Seite 7
+                
+                **Konfiguration:** Admin-Panel → Zahlungsmodalitäten
+                """)
+                
+                if selected_payment_variant:
+                    st.success("✅ Zahlungsmodalitäten aktiviert")
+                else:
+                    st.warning("⚠️ Keine Zahlungsmodalitäten ausgewählt")
+            
+            # Erweiterte Konfiguration in Expander
+            if selected_payment_variant:
+                with st.expander("🔧 Erweiterte Einstellungen", expanded=False):
+                    payment_position = st.selectbox(
+                        "Position im PDF:",
+                        options=["Seite 7 (Standard)", "Nach Kostenaufstellung", "Letzte Seite"],
+                        index=0,
+                        key="pdf_payment_position",
+                        help="Bestimmt, wo die Zahlungsmodalitäten im PDF erscheinen"
+                    )
+                    
+                    payment_style = st.selectbox(
+                        "Darstellungsstil:",
+                        options=["Standard", "Kompakt", "Detailliert", "Grafisch"],
+                        index=0,
+                        key="pdf_payment_style",
+                        help="Visueller Stil der Zahlungsmodalitäten im PDF"
+                    )
+                    
+                    custom_payment_title = st.text_input(
+                        "Benutzerdefinierter Titel:",
+                        value="Zahlungsmodalitäten",
+                        key="pdf_custom_payment_title",
+                        help="Überschrift für den Zahlungsmodalitäten-Bereich"
+                    )
+                    
+                    # Speichere erweiterte Optionen
+                    st.session_state['payment_position'] = payment_position
+                    st.session_state['payment_style'] = payment_style
+                    st.session_state['custom_payment_title'] = custom_payment_title
+            
+        except ImportError:
+            st.error("❌ Zahlungsmodalitäten-Komponenten nicht verfügbar. Bitte überprüfen Sie die admin_payment_terms_ui.py Datei.")
+        except Exception as e:
+            st.error(f"❌ Fehler beim Laden der Zahlungsmodalitäten: {str(e)}")
     
     # TAB 1: ERWEITERTE FINANZIERUNGSANALYSE
     with ext_tab1:
@@ -1487,3 +1607,101 @@ def render_pdf_debug_section(
 # 2025-06-07, Gemini Ultra: PDF-Vorschau-Integration hinzugefügt.
 # 2025-06-07, Gemini Ultra: Erweiterte PDF-Vorschau-Funktion (BOMBE!) hinzugefügt.
 # 2025-06-08, Gemini Ultra: Datenstatus-Anzeige und Fallback-PDF-Option hinzugefügt.
+# 2025-09-20, GitHub Copilot: Zahlungsmodalitäten-Tab und Integration hinzugefügt.
+
+
+def prepare_payment_data_for_pdf_generation(
+    load_admin_setting_func: Callable[[str, Any], Any]
+) -> Optional[Dict[str, Any]]:
+    """
+    Bereitet die ausgewählten Zahlungsmodalitäten für die PDF-Generierung vor.
+    
+    Args:
+        load_admin_setting_func: Funktion zum Laden der Admin-Einstellungen
+        
+    Returns:
+        Dictionary mit Zahlungsdaten für PDF-Generator oder None
+    """
+    
+    # Hole ausgewählte Zahlungsvariante aus Session State
+    selected_variant_key = st.session_state.get('selected_payment_variant_key')
+    if not selected_variant_key:
+        return None
+    
+    try:
+        from admin_payment_terms_ui import get_payment_variant_for_pdf_generation
+        
+        # Bestimme Gesamtbetrag
+        project_total = 15000.0  # Default
+        
+        # Versuche Gesamtbetrag aus Session State oder anderen Quellen zu holen
+        try:
+            if 'pdf_total_cost' in st.session_state:
+                project_total = float(st.session_state['pdf_total_cost'])
+            elif 'analysis_results' in st.session_state:
+                analysis = st.session_state['analysis_results']
+                if isinstance(analysis, dict):
+                    for key in ['total_cost', 'gesamtkosten', 'anlage_total_price']:
+                        if key in analysis:
+                            project_total = float(analysis[key])
+                            break
+        except (ValueError, TypeError):
+            pass
+        
+        # Hole Optionen aus Session State
+        include_amounts = st.session_state.get('payment_include_amounts', True)
+        include_table = st.session_state.get('payment_include_table', True)
+        position = st.session_state.get('payment_position', 'Seite 7 (Standard)')
+        style = st.session_state.get('payment_style', 'Standard')
+        custom_title = st.session_state.get('custom_payment_title', 'Zahlungsmodalitäten')
+        
+        # Generiere Zahlungsdaten
+        payment_data = get_payment_variant_for_pdf_generation(
+            selected_variant_key=selected_variant_key,
+            load_admin_setting_func=load_admin_setting_func,
+            project_total=project_total,
+            include_amounts=include_amounts
+        )
+        
+        if payment_data and payment_data.get('validation_passed', False):
+            # Füge UI-Optionen hinzu
+            payment_data.update({
+                'include_table': include_table,
+                'position': position,
+                'style': style,
+                'custom_title': custom_title,
+                'ui_total_amount': project_total
+            })
+            
+            return payment_data
+        else:
+            return None
+            
+    except ImportError:
+        st.error("❌ Zahlungsmodalitäten-Funktionen nicht verfügbar.")
+        return None
+    except Exception as e:
+        st.error(f"❌ Fehler bei Zahlungsdaten-Vorbereitung: {str(e)}")
+        return None
+
+
+def get_payment_data_for_pdf():
+    """
+    Convenience-Funktion zum Abrufen der Zahlungsdaten für PDF-Generatoren.
+    
+    Returns:
+        Zahlungsdaten oder None
+    """
+    
+    # Diese Funktion kann von PDF-Generatoren aufgerufen werden
+    try:
+        from admin_payment_terms_ui import get_default_payment_variants
+        
+        # Dummy-Load-Funktion falls keine verfügbar
+        def dummy_load(key, default=None):
+            return st.session_state.get(f'admin_setting_{key}', default)
+        
+        return prepare_payment_data_for_pdf_generation(dummy_load)
+        
+    except Exception:
+        return None
