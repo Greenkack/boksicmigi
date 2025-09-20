@@ -1091,27 +1091,24 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         # 1. Einspeisetarif bestimmen – PRIO: analysis_results > Admin > Default
 # --- Seite 3 – Kernberechnung für die 5 Werte (einzige Quelle) ---
 
-    # 1) Tarif (€/kWh): analysis_results > Admin-Staffel > Default
-    eeg_eur_per_kwh = None
-    _val = parse_float(analysis_results.get("einspeiseverguetung_eur_per_kwh"))
-    if _val and _val > 0:
-        eeg_eur_per_kwh = _val if _val < 1 else (_val / 100.0)
-    if not eeg_eur_per_kwh:
-        try:
-            from database import load_admin_setting
-            fit = load_admin_setting("feed_in_tariffs", {}) or {}
-            mode = (project_data.get("einspeise_art") or "parts")
-            anlage_kwp = parse_float(analysis_results.get("anlage_kwp")) or parse_float(project_data.get("anlage_kwp")) or 0.0
-            for t in (fit.get(mode, []) if isinstance(fit, dict) else []):
-                kmin = parse_float(t.get("kwp_min")) or 0.0
-                kmax = parse_float(t.get("kwp_max")) or 999999.0
-                if kmin <= anlage_kwp <= kmax:
-                    eeg_eur_per_kwh = (parse_float(t.get("ct_per_kwh")) or 7.86) / 100.0
-                    break
-        except Exception:
-            pass
-    if not eeg_eur_per_kwh or eeg_eur_per_kwh <= 0:
-        eeg_eur_per_kwh = 0.0786
+    # 1) Tarif (€/kWh) – vereinheitlicht über resolve_feed_in_tariff_eur_per_kwh
+    try:
+        from database import load_admin_setting as _load_admin_setting_feed
+    except Exception:
+        _load_admin_setting_feed = None
+    anlage_kwp_numeric = parse_float(analysis_results.get("anlage_kwp")) or parse_float(project_data.get("anlage_kwp")) or 0.0
+    einspeise_mode = (project_data.get("einspeise_art") or "parts")
+    if _load_admin_setting_feed:
+        eeg_eur_per_kwh = resolve_feed_in_tariff_eur_per_kwh(
+            float(anlage_kwp_numeric),
+            einspeise_mode,
+            _load_admin_setting_feed,
+            analysis_results_snapshot=(analysis_results.get("einspeiseverguetung_eur_per_kwh"),)
+        )
+    else:
+        eeg_eur_per_kwh = parse_float(analysis_results.get("einspeiseverguetung_eur_per_kwh")) or 0.0786
+        if eeg_eur_per_kwh > 1:  # falls ct geliefert
+            eeg_eur_per_kwh /= 100.0
 
     # 2) Strompreis (€/kWh)
     price_eur_per_kwh = (
@@ -1125,14 +1122,70 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
     if price_eur_per_kwh > 5:  # Falls fälschlich ct/kWh
         price_eur_per_kwh /= 100.0
 
-    # 3) Jahressummen (aus calculations.py Ergebnissen/Listen)
-    monthly_direct_sc        = analysis_results.get("monthly_direct_self_consumption_kwh") or []
-    monthly_storage_charge   = analysis_results.get("monthly_storage_charge_kwh") or []
-    monthly_storage_discharge= analysis_results.get("monthly_storage_discharge_for_sc_kwh") or []
-    monthly_feed_in          = analysis_results.get("monthly_feed_in_kwh") or []
+    # 3) Jahressummen / KWh-Quellen (aus calculations.py Ergebnissen/Listen)
+    monthly_direct_sc         = analysis_results.get("monthly_direct_self_consumption_kwh") or []
+    monthly_storage_charge    = analysis_results.get("monthly_storage_charge_kwh") or []
+    monthly_storage_discharge = analysis_results.get("monthly_storage_discharge_for_sc_kwh") or []
+    monthly_feed_in_list      = analysis_results.get("monthly_feed_in_kwh") or []
 
     direct_kwh = sum(float(x or 0) for x in monthly_direct_sc) if monthly_direct_sc else 0.0
-    feedin_kwh = parse_float(analysis_results.get("netzeinspeisung_kwh")) or (sum(float(x or 0) for x in monthly_feed_in) if monthly_feed_in else 0.0)
+
+    # Primäre Quelle für Seite 3: exakt der auf Seite 2 berechnete Wert feed_in_val (ungekürzt) falls vorhanden
+    # feed_in_val stammt aus Abschnitt Seite 2 weiter oben und wurde dort ggf. plausibilisiert.
+    feedin_kwh = None
+    try:
+        if 'feed_in_val' in locals() and feed_in_val is not None:
+            feedin_kwh = float(feed_in_val)
+    except Exception:
+        feedin_kwh = None
+
+    # Fallback 1: expliziter grid_feed_in_kwh Wert aus analysis_results (kann Liste / String / Zahl sein)
+    if (feedin_kwh is None or feedin_kwh == 0) and analysis_results.get("grid_feed_in_kwh") is not None:
+        raw_gfi = analysis_results.get("grid_feed_in_kwh")
+        try:
+            if isinstance(raw_gfi, list):
+                feedin_kwh = sum(float(x or 0) for x in raw_gfi)
+            elif isinstance(raw_gfi, (int, float)):
+                feedin_kwh = float(raw_gfi)
+            else:  # String
+                import re as _re
+                cleaned = _re.sub(r"[^0-9,\.]", "", str(raw_gfi)).replace(',', '.')
+                feedin_kwh = float(cleaned) if cleaned else 0.0
+        except Exception:
+            feedin_kwh = None
+
+    # Fallback 2: netzeinspeisung_kwh (Gesamtsumme aus Simulation)
+    if (feedin_kwh is None or feedin_kwh == 0) and analysis_results.get("netzeinspeisung_kwh") is not None:
+        try:
+            feedin_kwh = float(analysis_results.get("netzeinspeisung_kwh") or 0)
+        except Exception:
+            pass
+
+    # Fallback 3: Summe der monatlichen Feed-In Liste
+    if (feedin_kwh is None or feedin_kwh == 0) and monthly_feed_in_list:
+        try:
+            feedin_kwh = sum(float(x or 0) for x in monthly_feed_in_list)
+        except Exception:
+            pass
+
+    # Letzter Fallback: Wenn weiter nichts → 0 (KEIN hartkodierter 312er-Wert mehr, Fehler sichtbar machen)
+    if feedin_kwh is None:
+        feedin_kwh = 0.0
+
+    # Anomalie-Erkennung: Wenn Simulation (netzeinspeisung_kwh) extrem größer als Seite 2 Wert war
+    try:
+        sim_val = parse_float(analysis_results.get("netzeinspeisung_kwh")) or 0.0
+        if 'feed_in_val' in locals() and feed_in_val not in (None, 0) and sim_val > 0 and feedin_kwh == sim_val:
+            # Wenn Simulation > 3x Seite2-Wert -> verwende konservativ Seite2-Wert
+            if sim_val > 3 * float(feed_in_val):
+                print(f"WARN: Anomalie erkannt – simulierte Netzeinspeisung {sim_val:.2f} kWh >> Seite2 {feed_in_val:.2f} kWh. Verwende Seite2-Wert.")
+                feedin_kwh = float(feed_in_val)
+    except Exception:
+        pass
+
+    # Alias für konsistenten Zugriff (kann später im Result verwendet / getestet werden)
+    result.setdefault("annual_feed_in_kwh", fmt_number(feedin_kwh, 0, "kWh"))
+    
     speicher_ladung_kwh   = sum(float(x or 0) for x in monthly_storage_charge) if monthly_storage_charge else 0.0
     speicher_nutzung_kwh  = sum(float(x or 0) for x in monthly_storage_discharge) if monthly_storage_discharge else 0.0
 
@@ -1178,10 +1231,21 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
     # Debug-Ausgabe wie im Test
     print("DEBUG PAGE3 -> Preise & Tarife:")
     print(f"  Strompreis (€ / kWh): {price_eur_per_kwh:.2f} | EEG (€ / kWh): {eeg_eur_per_kwh:.2f}")
-    print("DEBUG PAGE3 -> Energieströme (kWh):")
+    print("DEBUG PAGE3 -> kWh-Datenquellen ANALYSE:")
+    print(f"  grid_feed_in_kwh (Seite 2, raw): {analysis_results.get('grid_feed_in_kwh')}")
+    print(f"  netzeinspeisung_kwh (Simulation): {analysis_results.get('netzeinspeisung_kwh')}")
+    print(f"  monthly_feed_in_kwh (Liste): {analysis_results.get('monthly_feed_in_kwh')}")
+    try:
+        print(f"  Summe monthly_feed_in_kwh: {sum(float(x or 0) for x in (analysis_results.get('monthly_feed_in_kwh') or [])):.2f} kWh")
+    except Exception:
+        print("  Summe monthly_feed_in_kwh: n/a")
+    print(f"  FINAL verwendeter Feed-In Wert (kWh): {feedin_kwh:.2f}")
+    if result.get('annual_feed_in_kwh'):
+        print(f"  annual_feed_in_kwh (alias): {result.get('annual_feed_in_kwh')}")
     print(f"  Direkt: {direct_kwh:.2f} | Einspeisung: {feedin_kwh:.2f} | Speicher Ladung: {speicher_ladung_kwh:.2f} | Nutzung: {speicher_nutzung_kwh:.2f} | Überschuss: {speicher_ueberschuss_kwh:.2f}")
-    print("DEBUG PAGE3 -> Geldwerte (€):")
-    print(f"  Direkt: {val_direct_money:.2f} | Einspeisung: {val_feedin_money:.2f} | Steuervorteile: {val_steuerliche_vorteile:.2f}")
+    print("DEBUG PAGE3 -> Berechnete Geldwerte:")
+    print(f"  Direkt: {val_direct_money:.2f} € | Einspeisung: {val_feedin_money:.2f} € | Steuervorteile: {val_steuerliche_vorteile:.2f} €")
+    print(f"  FORMEL Einspeisung: {feedin_kwh:.2f} kWh × {eeg_eur_per_kwh:.4f} €/kWh = {val_feedin_money:.2f} €")
     print(f"  Speichernutzung: {val_speicher_nutzung_money:.2f} | Speicherüberschuss: {val_speicher_ueberschuss_money:.2f}")
     print(f"  GESAMT (ohne Speicher): {total_savings:.2f}")
     print(f"  Einkommensteuersatz: {einkommensteuer_satz*100 if einkommensteuer_satz <= 1 else einkommensteuer_satz:.1f}%")
@@ -2012,8 +2076,10 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
 
     # Seite 1 – neue dynamische Felder und statische Texte nach Kundenwunsch
     # 1) Jährliche Einspeisevergütung in Euro (für Platz "Dachneigung")
-    #    Nur berechnen wenn nicht zuvor über Seite3 synchronisiert
-    if "annual_feed_in_revenue_eur" not in result:
+    #    KOMPLETT DEAKTIVIERT: Diese ganze Sektion überschreibt die korrekte Seite 3 Berechnung
+    """
+    DEAKTIVIERTE SEKTION - ÜBERSCHREIBT KORREKTE BERECHNUNG
+    if False and "annual_feed_in_revenue_eur" not in result:
         try:
             # Primär vorhandene Berechnung nehmen
             annual_feed_rev = (
@@ -2056,6 +2122,7 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
                     result["annual_feed_in_revenue_eur"] = fmt_number(float(annual_feed_rev), 2, "€")
         except Exception:
             pass
+    """
 
     # 2) MwSt.-Betrag (19% vom Netto-Endbetrag) für Platz "Solaranlage"
     # Basis: bevorzugt total_investment_netto, sonst final_price (falls Netto), sonst subtotal_netto.
@@ -2144,8 +2211,9 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
             result["annual_electricity_cost_savings_self_consumption_year1"] = fmt_number(direct_kwh*curr_price,2,"€")
         feed_kwh = _pf(analysis_results.get("netzeinspeisung_kwh"))
         feed_tariff = _pf(analysis_results.get("einspeiseverguetung_eur_per_kwh")) or _pf(analysis_results.get("feed_in_tariff_eur_per_kwh")) or _pf(analysis_results.get("feed_in_tariff_year1_eur_per_kwh"))
-        if feed_kwh is not None and feed_tariff is not None:
-            result["annual_feed_in_revenue_year1"] = fmt_number(feed_kwh*feed_tariff,2,"€")
+        # DEAKTIVIERT: Diese Zeile überschreibt die korrekte Seite 3 Berechnung mit falschen Daten
+        # if feed_kwh is not None and feed_tariff is not None:
+        #     result["annual_feed_in_revenue_year1"] = fmt_number(feed_kwh*feed_tariff,2,"€")
         batt_dis = _pf(analysis_results.get("battery_discharge_for_sc_kwh"))
         if batt_dis is not None and curr_price>0:
             result["annual_battery_discharge_value_year1"] = fmt_number(batt_dis*curr_price,2,"€")

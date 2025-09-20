@@ -1518,7 +1518,7 @@ def render_comprehensive_admin_payment_terms_ui(
                     
                     if success1 and success2:
                         st.success("✅ Zahlungsmodalitäten erfolgreich gespeichert!")
-                        st.balloons()
+                       
                     else:
                         st.error("❌ Fehler beim Speichern der Zahlungsmodalitäten.")
                         
