@@ -2190,23 +2190,6 @@ def get_payment_variant_for_pdf_generation(
             'error': str(e),
             'validation_passed': False
         }
-                st.session_state[f"confirm_reset{widget_key_suffix}"] = True
-                st.warning("⚠️ Erneut klicken um zu bestätigen!")
-    
-    with col_save3:
-        if st.button("🔍 Konfiguration validieren", key=f"validate_payment_terms{widget_key_suffix}"):
-            validation_errors = validate_payment_terms_config(current_payment_terms)
-            
-            if validation_errors:
-                st.error("❌ Validierungsfehler gefunden:")
-                for error in validation_errors:
-                    st.error(f"• {error}")
-            else:
-                st.success("✅ Konfiguration ist gültig!")
-    
-    with col_save4:
-        with st.expander("🔧 Debug"):
-            st.json(current_payment_terms)
 
 
 def validate_payment_terms_config(config: Dict[str, Any]) -> List[str]:
