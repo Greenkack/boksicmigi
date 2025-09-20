@@ -1720,7 +1720,16 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
             except Exception:
                 pass
             if watt_val is not None:
-                result["inverter_power_watt"] = fmt_number(watt_val, 1000, "W")
+                # Format: Tausendertrennzeichen (deutsch), keine Nachkommastellen: z.B. 6.000 W
+                try:
+                    watt_int = int(round(watt_val))
+                except Exception:
+                    watt_int = watt_val
+                try:
+                    result["inverter_power_watt"] = f"{watt_int:,.0f}".replace(",", ".") + " W"
+                except Exception:
+                    # Fallback auf vorhandenes Formatierungs-Hilfsmittel
+                    result["inverter_power_watt"] = fmt_number(watt_val, 0, "W")
         except Exception:
             pass
 
