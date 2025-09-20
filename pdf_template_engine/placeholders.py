@@ -362,6 +362,11 @@ PLACEHOLDER_MAPPING.update({
     "BATTERIESPEICHER": "storage_section_title",
     # Neue/angepasste Werte-Felder rechte Spalte (Labels sind statisch in YAML)
     "Leistung pro PV-Modul": "module_power_per_panel_watt",
+    # Fehlende direkte Mappings aus seite4.yml (Wertfelder):
+    # In der YAML steht für Hersteller / Modell aktuell "Modul-Hersteller" und "Modul-Modell" als Platzhaltertexte
+    # Diese waren bisher NICHT gemappt und erschienen deshalb statisch.
+    "Modul-Hersteller": "module_manufacturer",
+    "Modul-Modell": "module_model",
     "PV-Zellentechnologie1": "module_cell_technology",
     "Modulaufbau1": "module_structure",
     "Solarzellen1": "module_cell_type",
@@ -370,6 +375,8 @@ PLACEHOLDER_MAPPING.update({
     # In der Vorlage steht neben "Garantie:" beim Modul oft der Text "siehe Produktdatenblatt" –
     # mappe diesen explizit auf den kombinierten Garantietext, damit echte Werte aus der DB erscheinen.
     "siehe Produktdatenblatt": "module_guarantee_combined",
+    # Variante mit Zusatz "anbei" aus coords/seite4.yml
+    "siehe Produktdatenblatt anbei": "module_guarantee_combined",
     
     # Logo-Platzhalter für Seite 4 (werden als Bilder gerendert statt als Text)
     "Logomodul": "module_brand_logo_b64",
@@ -1642,6 +1649,19 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
     if not result.get("module_guarantee_combined"):
         result["module_guarantee_combined"] = "siehe Produktdatenblatt"
 
+    # DEBUG: Modul-Seite4 Attribute (temporär, zur Validierung der neuen Mappings)
+    try:
+        debug_keys = [
+            "module_manufacturer", "module_model", "module_power_per_panel_watt",
+            "module_cell_technology", "module_structure", "module_cell_type",
+            "module_version", "module_guarantee_combined"
+        ]
+        print("DEBUG SEITE4 MODULE ATTRIBUTES:")
+        for dk in debug_keys:
+            print(f"  {dk} = {result.get(dk)!r}")
+    except Exception:
+        pass
+
     # Wechselrichter
     inverter_name = as_str(project_details.get("selected_inverter_name") or "").strip()
     inverter_details = fetch_details(inverter_name) if inverter_name else {}
@@ -2083,6 +2103,88 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         if v not in (None, ""):
             result[k] = as_str(v)
 
+    # =============================================================
+    # Hersteller-Namen NORMALISIERUNG (nur Anzeige, Logo-Lookup nutzt Raw)
+    # =============================================================
+    def _normalize_brand_display(name: str) -> str:
+        """Bereinigt Herstellernamen nur für die Anzeige.
+        Entfernt funktionale Suffixe, egal ob angehängt (EcoFlowWR) oder getrennt (EcoFlow WR / EcoFlow Speicher).
+        """
+        try:
+            if not name:
+                return name
+            import re
+            original = name.strip()
+            # 1. Separator-Varianten vereinheitlichen
+            cleaned = original.replace("_", " ").replace("-", " ")
+            suffix_tokens = {"pv", "wr", "wechselrichter", "speicher", "batterie", "akku", "ess", "stromspeicher"}
+
+            # 2. Token-basiertes Entfernen am Ende
+            parts = [p for p in cleaned.split() if p]
+            changed = False
+            while parts and parts[-1].lower().strip("()[]{}.,") in suffix_tokens:
+                parts.pop()
+                changed = True
+
+            candidate = " ".join(parts).strip() if parts else original
+
+            # 3. Direkt angehängte Suffixe mehrfach entfernen (EcoFlowWRSpeicher -> EcoFlow)
+            # Pattern wiederholt anwenden bis nichts mehr entfernt wird.
+            attached_pattern = re.compile(r"^(.*?)(pv|wr|speicher|batterie|akku|ess|stromspeicher)$", re.IGNORECASE)
+            prev = None
+            while candidate and candidate != prev:
+                prev = candidate
+                m = attached_pattern.match(candidate)
+                if m and m.group(1).strip():
+                    candidate = m.group(1).strip()
+                    changed = True
+                else:
+                    break
+
+            # 4. Mindestlängen-/Rest-Heuristik: Verhindere zu starke Kürzung
+            if changed:
+                # Wenn extrem kurz oder nur generisches Fragment, fallback auf original
+                if len(candidate) < 3:
+                    return original
+                # Verhindere dass nur generische Wörter alleine bleiben
+                generic_alone = {"solar", "energy", "power"}
+                if candidate.lower() in generic_alone:
+                    return original
+            # 5. Mehrfache Spaces entfernen
+            candidate = re.sub(r"\s+", " ", candidate).strip()
+            return candidate or original
+        except Exception:
+            return name
+
+    # Roh-Werte sichern bevor wir bereinigen (für Logo-Lookup wichtig)
+    for comp_key in ("module", "inverter", "storage"):
+        man_key = f"{comp_key}_manufacturer"
+        if man_key in result and result.get(man_key):
+            raw_key = f"{man_key}_raw"
+            if raw_key not in result:  # nur einmal setzen
+                result[raw_key] = result.get(man_key)
+            # Anzeige bereinigen
+            result[man_key] = _normalize_brand_display(str(result.get(man_key)))
+
+    # =============================================================
+    # Garantie-Texte GLOBAL vereinheitlichen (Kundenwunsch)
+    # =============================================================
+    for gk in ("module_guarantee_combined", "inverter_guarantee_text", "storage_warranty_text"):
+        # Immer überschreiben unabhängig vom bisherigen Inhalt
+        result[gk] = "siehe Produktdatenblatt"
+
+    # DEBUG: Garantie-Override & Hersteller Raw/Display prüfen
+    try:
+        print("DEBUG GUARANTEE OVERRIDE:")
+        print("  module_guarantee_combined=", result.get("module_guarantee_combined"))
+        print("  inverter_guarantee_text=", result.get("inverter_guarantee_text"))
+        print("  storage_warranty_text=", result.get("storage_warranty_text"))
+        for comp_key in ("module", "inverter", "storage"):
+            print(f"  {comp_key}_manufacturer_raw=", result.get(f"{comp_key}_manufacturer_raw"), "display=", result.get(f"{comp_key}_manufacturer"))
+    except Exception:
+        pass
+
+
     # Seite 1 – neue dynamische Felder und statische Texte nach Kundenwunsch
     # 1) Jährliche Einspeisevergütung in Euro (für Platz "Dachneigung")
     #    KOMPLETT DEAKTIVIERT: Diese ganze Sektion überschreibt die korrekte Seite 3 Berechnung
@@ -2506,70 +2608,99 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         
         # Hersteller aus Projektdaten extrahieren (lokale Implementierung)
         def extract_brands_from_project_data(project_data_local: Dict[str, Any]) -> Dict[str, str]:
-            """Extrahiert Herstellernamen aus den Projektdaten"""
-            brands = {}
-            
-            # Hole project_details aus project_data
+            """Extrahiert Hersteller-Roh-Namen (für Logo-Lookup). Nutzen Reihenfolge:
+            1. project_details explizit
+            2. *_manufacturer_raw (vor Normalisierung gesichert)
+            3. bereinigte *_manufacturer (Leerzeichen entfernt)
+            """
+            brands: Dict[str, str] = {}
             project_details_local = project_data_local.get("project_details", {}) or {}
-            
-            # Modul-Hersteller
-            module_brand = (
-                project_details_local.get("module_manufacturer") 
-                or result.get("module_manufacturer", "").replace(" ", "")
-            )
+
+            def pick(raw_key: str, disp_key: str, proj_key: str) -> str:
+                # Priorität: project_details -> raw -> display -> ""
+                val = as_str(project_details_local.get(proj_key) or "").strip()
+                if not val:
+                    val = as_str(result.get(raw_key) or "").strip()
+                if not val:
+                    val = as_str(result.get(disp_key) or "").strip()
+                return val.replace(" ", "")
+
+            module_brand = pick("module_manufacturer_raw", "module_manufacturer", "module_manufacturer")
             if module_brand:
-                brands['modul'] = module_brand
-            
-            # Wechselrichter-Hersteller  
-            inverter_brand = (
-                project_details_local.get("inverter_manufacturer")
-                or result.get("inverter_manufacturer", "").replace(" ", "")
-            )
+                brands["modul"] = module_brand
+
+            inverter_brand = pick("inverter_manufacturer_raw", "inverter_manufacturer", "inverter_manufacturer")
             if inverter_brand:
-                brands['wechselrichter'] = inverter_brand
-            
-            # Speicher-Hersteller
-            storage_brand = (
-                project_details_local.get("storage_manufacturer")
-                or result.get("storage_manufacturer", "").replace(" ", "")
-            )
+                brands["wechselrichter"] = inverter_brand
+
+            storage_brand = pick("storage_manufacturer_raw", "storage_manufacturer", "storage_manufacturer")
             if storage_brand:
-                brands['batteriespeicher'] = storage_brand
-            
+                brands["batteriespeicher"] = storage_brand
+
             return brands
         
-        # Hersteller aus Projektdaten extrahieren
+        # Hersteller aus Projektdaten extrahieren (Roh)
         brands_by_category = extract_brands_from_project_data(project_data)
+
+        # Fallback-Varianten ohne funktionale Suffixe für besseren DB-Match vorbereiten
+        def _brand_logo_key_variants(b: str) -> list[str]:
+            import re
+            if not b:
+                return []
+            variants = []
+            base = b
+            attached = re.compile(r"^(.*?)(pv|wr|speicher|batterie|akku|ess|stromspeicher)$", re.IGNORECASE)
+            prev = None
+            while base and base != prev:
+                prev = base
+                m = attached.match(base)
+                if m and m.group(1).strip():
+                    base = m.group(1).strip()
+                    variants.append(base)
+                else:
+                    break
+            variants_norm = list({v for v in variants if v and v.lower() != b.lower()})
+            return variants_norm
         
     # (Frühere Dummy-Placeholder "logo_*_placeholder" entfernt – direkte Nutzung der echten Keys)
         
         # Logos aus Datenbank holen
         if brands_by_category:
-            brand_names = list(brands_by_category.values())
-            unique_brands = list(set(brand_names))  # Duplikate entfernen
-            
+            brand_names_raw = list(brands_by_category.values())
+            extended = []
+            for b in brand_names_raw:
+                extended.append(b)
+                for v in _brand_logo_key_variants(b):
+                    if v not in extended:
+                        extended.append(v)
+            unique_brands = list(set(extended))
+
             logos_data = get_logos_for_brands(unique_brands)
-            
-            # Logo-Platzhalter mit Base64-Daten befüllen - die exakten Namen aus seite4.yml verwenden
+
             logo_mapping = {
                 'modul': 'module_brand_logo_b64',
-                'wechselrichter': 'inverter_brand_logo_b64', 
+                'wechselrichter': 'inverter_brand_logo_b64',
                 'batteriespeicher': 'storage_brand_logo_b64'
             }
-            
+
             for category, brand_name in brands_by_category.items():
+                logo_key = logo_mapping.get(category)
+                if not logo_key:
+                    continue
+                chosen = None
                 if brand_name in logos_data:
-                    logo_data = logos_data[brand_name]
-                    logo_key = logo_mapping.get(category)
-                    
-                    if logo_key:
-                        # Base64-Daten für direkten Zugriff speichern
-                        result[logo_key] = logo_data.get('logo_base64', '')
-                        result[f"{logo_key}_format"] = logo_data.get('logo_format', 'PNG')
-                        
-                        print(f"Logo für {category} ({brand_name}) -> {logo_key} eingetragen")
+                    chosen = logos_data[brand_name]
                 else:
-                    print(f"Kein Logo für {category} ({brand_name}) gefunden")
+                    for v in _brand_logo_key_variants(brand_name):
+                        if v in logos_data:
+                            chosen = logos_data[v]
+                            break
+                if chosen:
+                    result[logo_key] = chosen.get('logo_base64', '')
+                    result[f"{logo_key}_format"] = chosen.get('logo_format', 'PNG')
+                    print(f"Logo für {category} ({brand_name}) -> Match gespeichert (DB-Key: {chosen.get('brand_name')})")
+                else:
+                    print(f"Kein Logo-Match für {category} ({brand_name}) inkl. Varianten")
     
     except Exception as e:
         print(f"Fehler bei der Logo-Integration: {e}")
