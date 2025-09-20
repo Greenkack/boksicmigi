@@ -161,7 +161,6 @@ ADMIN_TAB_KEYS_DEFINITION_GLOBAL = [
     "admin_tab_company_management_new", "admin_tab_product_management", "admin_tab_logo_management", 
     "admin_tab_product_database_crud",
     "admin_tab_general_settings", "admin_tab_price_matrix", "admin_tab_tariff_management", "admin_tab_pdf_design",
-    "admin_tab_pdf_title_images", "admin_tab_pdf_offer_titles", "admin_tab_pdf_cover_letters",
     "admin_tab_visualization_settings",
     "admin_tab_advanced"
 ]
@@ -1555,42 +1554,63 @@ def render_advanced_settings(load_admin_setting_func: Callable, save_admin_setti
             else: st.error(f"Falscher Bestätigungstext...")
     
 def render_pdf_design_settings(load_admin_setting_func: Callable, save_admin_setting_func: Callable):
-    st.subheader(get_text_local("admin_pdf_company_branding_expander", "Firmen-Branding für PDF-Dokumente"))
-    active_company_id = load_admin_setting_func('active_company_id', None)
-    company_info_for_pdf = {"name": "Ihre Firma (Platzhalter)", "id":0}; company_logo_b64_for_pdf = None
-    if _get_company_by_id_safe and callable(_get_company_by_id_safe) and active_company_id:
-        active_company_data = _get_company_by_id_safe(int(active_company_id))
-        if active_company_data: company_info_for_pdf = active_company_data; company_logo_b64_for_pdf = active_company_data.get('logo_base64')
-    col_pdf_logo, col_pdf_info = st.columns([1,2])
-    with col_pdf_logo:
-        st.markdown("<h6>" + get_text_local("admin_pdf_logo_header_short", "Logo für PDF") + "</h6>", unsafe_allow_html=True)
-        if company_logo_b64_for_pdf:
-            try: st.image(base64.b64decode(company_logo_b64_for_pdf), width=150, caption=get_text_local("admin_pdf_current_logo_caption", "Aktives Logo"))
-            except Exception: st.warning(get_text_local("admin_pdf_logo_display_error", "Fehler Anzeige Logo"))
-        else: st.caption(get_text_local("admin_pdf_no_active_logo", "Kein Logo für aktive Firma gesetzt."))
-        st.caption(get_text_local("admin_pdf_logo_manage_in_companies", "Logo wird in der 'Firmenverwaltung'... verwendet."))
-    with col_pdf_info:
-        st.markdown("<h6>" + get_text_local("admin_pdf_company_info_header_short", "Firmeninfo für PDF") + "</h6>", unsafe_allow_html=True)
-        for field_key, label_key_suffix in [("name","name"), ("street","address1"), ("zip_code","address2_zip"), ("city","address2_city"), ("phone","phone"), ("email","email"), ("website","website"), ("tax_id","tax_id"), ("commercial_register","commercial_register")]:
-            val_disp = company_info_for_pdf.get(field_key, '')
-            if field_key == "zip_code": val_disp = f"{company_info_for_pdf.get('zip_code', '')} {company_info_for_pdf.get('city', '')}".strip()
-            if field_key == "city" and "zip_code" in [f[0] for f in [("name","name"), ("street","address1"), ("zip_code","address2_zip"), ("city","address2_city"), ("phone","phone"), ("email","email"), ("website","website"), ("tax_id","tax_id"), ("commercial_register","commercial_register")]]: continue
-            st.text_input(get_text_local(f"admin_pdf_company_{label_key_suffix}", field_key.replace("_"," ").title()), value=val_disp, disabled=True, key=f"pdf_disp_ci_{field_key}{WIDGET_KEY_SUFFIX}")
-        st.caption(get_text_local("admin_pdf_company_info_manage_in_companies", "Firmeninformationen werden in 'Firmenverwaltung' gepflegt..."))
-    st.markdown("---"); st.subheader(get_text_local("admin_pdf_design_colors_header", "PDF Design Farben"))
-    PDF_DESIGN_SETTINGS_DEFAULT = {'primary_color': '#4F81BD', 'secondary_color': '#C0C0C0'}
-    current_design_settings = load_admin_setting_func('pdf_design_settings', PDF_DESIGN_SETTINGS_DEFAULT.copy())
-    if not isinstance(current_design_settings, dict): current_design_settings = PDF_DESIGN_SETTINGS_DEFAULT.copy()
-    with st.form(f"pdf_design_form{WIDGET_KEY_SUFFIX}"):
-      primary_color = st.color_picker(get_text_local("admin_pdf_primary_color_label", "PDF Haupt-/Akzentfarbe"), value=current_design_settings.get('primary_color', PDF_DESIGN_SETTINGS_DEFAULT['primary_color']), key=f"pdf_primary_color{WIDGET_KEY_SUFFIX}")
-      secondary_color = st.color_picker(get_text_local("admin_pdf_secondary_color_label", "PDF Sekundärfarbe"), value=current_design_settings.get('secondary_color', PDF_DESIGN_SETTINGS_DEFAULT['secondary_color']), key=f"pdf_secondary_color{WIDGET_KEY_SUFFIX}")
-      submitted_pdf_design = st.form_submit_button(get_text_local("admin_save_pdf_design_button", "Design Einstellungen Speichern"))
-    if submitted_pdf_design:
-        updated_design_settings = {'primary_color': primary_color, 'secondary_color': secondary_color}
-        if save_admin_setting_func('pdf_design_settings', updated_design_settings):
-          st.success(get_text_local("admin_pdf_design_settings_saved_success", "PDF Design gespeichert.")); 
-          st.session_state.selected_page_key_sui = "admin"; st.rerun()
-        else: st.error(get_text_local("admin_pdf_design_settings_save_error", "Fehler Speichern PDF Design."))
+    """Erweiterte PDF Design Einstellungen mit integrierten Template-Management"""
+    st.subheader(get_text_local("admin_pdf_design_main_header", "PDF Design & Vorlagen"))
+    
+    # Sub-Tabs für bessere Organisation
+    design_tab, title_images_tab, offer_titles_tab, cover_letters_tab = st.tabs([
+        "🎨 Design & Branding",
+        "🖼️ Titelbilder", 
+        "📝 Angebotstitels",
+        "💌 Anschreiben"
+    ])
+    
+    with design_tab:
+        st.subheader(get_text_local("admin_pdf_company_branding_expander", "Firmen-Branding für PDF-Dokumente"))
+        active_company_id = load_admin_setting_func('active_company_id', None)
+        company_info_for_pdf = {"name": "Ihre Firma (Platzhalter)", "id":0}; company_logo_b64_for_pdf = None
+        if _get_company_by_id_safe and callable(_get_company_by_id_safe) and active_company_id:
+            active_company_data = _get_company_by_id_safe(int(active_company_id))
+            if active_company_data: company_info_for_pdf = active_company_data; company_logo_b64_for_pdf = active_company_data.get('logo_base64')
+        col_pdf_logo, col_pdf_info = st.columns([1,2])
+        with col_pdf_logo:
+            st.markdown("<h6>" + get_text_local("admin_pdf_logo_header_short", "Logo für PDF") + "</h6>", unsafe_allow_html=True)
+            if company_logo_b64_for_pdf:
+                try: st.image(base64.b64decode(company_logo_b64_for_pdf), width=150, caption=get_text_local("admin_pdf_current_logo_caption", "Aktives Logo"))
+                except Exception: st.warning(get_text_local("admin_pdf_logo_display_error", "Fehler Anzeige Logo"))
+            else: st.caption(get_text_local("admin_pdf_no_active_logo", "Kein Logo für aktive Firma gesetzt."))
+            st.caption(get_text_local("admin_pdf_logo_manage_in_companies", "Logo wird in der 'Firmenverwaltung'... verwendet."))
+        with col_pdf_info:
+            st.markdown("<h6>" + get_text_local("admin_pdf_company_info_header_short", "Firmeninfo für PDF") + "</h6>", unsafe_allow_html=True)
+            for field_key, label_key_suffix in [("name","name"), ("street","address1"), ("zip_code","address2_zip"), ("city","address2_city"), ("phone","phone"), ("email","email"), ("website","website"), ("tax_id","tax_id"), ("commercial_register","commercial_register")]:
+                val_disp = company_info_for_pdf.get(field_key, '')
+                if field_key == "zip_code": val_disp = f"{company_info_for_pdf.get('zip_code', '')} {company_info_for_pdf.get('city', '')}".strip()
+                if field_key == "city" and "zip_code" in [f[0] for f in [("name","name"), ("street","address1"), ("zip_code","address2_zip"), ("city","address2_city"), ("phone","phone"), ("email","email"), ("website","website"), ("tax_id","tax_id"), ("commercial_register","commercial_register")]]: continue
+                st.text_input(get_text_local(f"admin_pdf_company_{label_key_suffix}", field_key.replace("_"," ").title()), value=val_disp, disabled=True, key=f"pdf_disp_ci_{field_key}{WIDGET_KEY_SUFFIX}")
+            st.caption(get_text_local("admin_pdf_company_info_manage_in_companies", "Firmeninformationen werden in 'Firmenverwaltung' gepflegt..."))
+        st.markdown("---"); st.subheader(get_text_local("admin_pdf_design_colors_header", "PDF Design Farben"))
+        PDF_DESIGN_SETTINGS_DEFAULT = {'primary_color': '#4F81BD', 'secondary_color': '#C0C0C0'}
+        current_design_settings = load_admin_setting_func('pdf_design_settings', PDF_DESIGN_SETTINGS_DEFAULT.copy())
+        if not isinstance(current_design_settings, dict): current_design_settings = PDF_DESIGN_SETTINGS_DEFAULT.copy()
+        with st.form(f"pdf_design_form{WIDGET_KEY_SUFFIX}"):
+          primary_color = st.color_picker(get_text_local("admin_pdf_primary_color_label", "PDF Haupt-/Akzentfarbe"), value=current_design_settings.get('primary_color', PDF_DESIGN_SETTINGS_DEFAULT['primary_color']), key=f"pdf_primary_color{WIDGET_KEY_SUFFIX}")
+          secondary_color = st.color_picker(get_text_local("admin_pdf_secondary_color_label", "PDF Sekundärfarbe"), value=current_design_settings.get('secondary_color', PDF_DESIGN_SETTINGS_DEFAULT['secondary_color']), key=f"pdf_secondary_color{WIDGET_KEY_SUFFIX}")
+          submitted_pdf_design = st.form_submit_button(get_text_local("admin_save_pdf_design_button", "Design Einstellungen Speichern"))
+        if submitted_pdf_design:
+            updated_design_settings = {'primary_color': primary_color, 'secondary_color': secondary_color}
+            if save_admin_setting_func('pdf_design_settings', updated_design_settings):
+              st.success(get_text_local("admin_pdf_design_settings_saved_success", "PDF Design gespeichert.")); 
+              st.session_state.selected_page_key_sui = "admin"; st.rerun()
+            else: st.error(get_text_local("admin_pdf_design_settings_save_error", "Fehler Speichern PDF Design."))
+    
+    with title_images_tab:
+        manage_templates_local("pdf_title_image", "pdf_title_image_templates", "admin_template_name_label_image", is_image_template=True)
+    
+    with offer_titles_tab:
+        manage_templates_local("pdf_offer_title", "pdf_offer_title_templates", "admin_template_name_label_text", item_content_label_key="admin_template_content_label_title")
+    
+    with cover_letters_tab:
+        manage_templates_local("pdf_cover_letter", "pdf_cover_letter_templates", "admin_template_name_label_text", item_content_label_key="admin_template_content_label_cover_letter")
 
 def manage_templates_local(template_type_key: str, template_list_setting_key: str, item_name_label_key: str, item_content_label_key: Optional[str] = None, is_image_template: bool = False ):
     st.subheader(get_text_local(f"admin_{template_type_key}_header", f"{template_type_key.replace('_', ' ').title()} Vorlagen"))
@@ -1826,9 +1846,6 @@ def render_admin_panel(
         "admin_tab_price_matrix": lambda: render_price_matrix(load_admin_setting_func, save_admin_setting_func, _parse_price_matrix_csv_safe, _parse_price_matrix_excel_func),
         "admin_tab_tariff_management": lambda: render_tariff_management(load_admin_setting_func, save_admin_setting_func),
         "admin_tab_pdf_design": lambda: render_pdf_design_settings(load_admin_setting_func, save_admin_setting_func),
-        "admin_tab_pdf_title_images": lambda: manage_templates_local("pdf_title_image", "pdf_title_image_templates", "admin_template_name_label_image", is_image_template=True),
-        "admin_tab_pdf_offer_titles": lambda: manage_templates_local("pdf_offer_title", "pdf_offer_title_templates", "admin_template_name_label_text", item_content_label_key="admin_template_content_label_title"),
-        "admin_tab_pdf_cover_letters": lambda: manage_templates_local("pdf_cover_letter", "pdf_cover_letter_templates", "admin_template_name_label_text", item_content_label_key="admin_template_content_label_cover_letter"),
         "admin_tab_visualization_settings": lambda: render_visualization_settings(load_admin_setting_func, save_admin_setting_func),
         "admin_tab_advanced": lambda: render_advanced_settings(load_admin_setting_func, save_admin_setting_func),
     }

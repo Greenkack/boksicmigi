@@ -1,22 +1,7 @@
 # admin_logo_management_ui.py
 """
 Logo-Management UI für den Admin-Bereich
-Ermöglicht CRUD-Operationen für Hersteller-Logos mit                            brand_name = st.text_input(
-                "Hersteller-Name:",
-                key="upload_logo_brand_input",
-                placeholder="Z.B. SolarTech GmbH"
-            )
-        
-        # Datei-Upload
-        uploaded_file = st.file_uploader(
-            "Logo-Datei auswählen:",
-            type=['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp'],
-            key="upload_logo_file_upload"
-        )= st.text_input(
-                    "Neuer Hersteller-Name:",
-                    key="upload_logo_brand_new",
-                    placeholder="Z.B. SolarTech GmbH"
-                )d und Verwaltung
+Ermöglicht CRUD-Operationen für Hersteller-Logos mit Upload und Verwaltung
 """
 
 import streamlit as st
@@ -137,7 +122,7 @@ def render_logo_upload_section():
             selected_brand_option = st.selectbox(
                 "Hersteller auswählen:",
                 brand_options,
-                key="upload_logo_brand_select"
+                key="logo_brand_select"
             )
             
             if selected_brand_option == "🆕 Neuen Hersteller eingeben":
@@ -192,7 +177,7 @@ def render_logo_upload_section():
                 st.error(f"Vorschau-Fehler: {e}")
     
     # Upload-Button
-    if st.button("💾 Logo speichern", type="primary", disabled=not (brand_name and uploaded_file), key="upload_logo_save_button"):
+    if st.button("💾 Logo speichern", type="primary", disabled=not (brand_name and uploaded_file)):
         if not LOGO_DB_AVAILABLE:
             st.error("Logo-Datenbank nicht verfügbar!")
             return
@@ -486,7 +471,7 @@ def render_logo_add_section():
                     # Logo-Vorschau
                     st.image(uploaded_logo, width=200, caption="Logo-Vorschau")
             
-            submitted = st.form_submit_button("Logo hinzufügen", key="brand_crud_submit")
+            submitted = st.form_submit_button("Logo hinzufügen")
             
             if submitted:
                 if not brand_name or not uploaded_logo:
@@ -496,26 +481,26 @@ def render_logo_add_section():
                     logo_result = admin.process_logo_image(uploaded_logo)
                     
                     if logo_result['success']:
-                        result = admin.add_brand_logo(
-                            brand_name=brand_name,
-                            logo_base64=logo_result['base64'],
-                            file_extension=logo_result['extension'],
-                            description=description,
-                            website_url=website_url,
-                            country=country,
-                            category=category,
-                            logo_width=logo_result['width'],
-                            logo_height=logo_result['height'],
-                            file_size_kb=logo_result['file_size_kb']
-                        )
+                        result = admin.add_brand_logo({
+                            'brand_name': brand_name,
+                            'logo_base64': logo_result['logo_base64'],
+                            'file_extension': logo_result['file_extension'],
+                            'description': description,
+                            'website_url': website_url,
+                            'country': country,
+                            'category': category,
+                            'logo_width': logo_result['logo_width'],
+                            'logo_height': logo_result['logo_height'],
+                            'file_size_kb': logo_result['file_size_kb']
+                        })
                         
-                        if result['success']:
+                        if result:
                             st.success(f"✅ Logo für '{brand_name}' erfolgreich hinzugefügt!")
                             st.rerun()
                         else:
-                            st.error(f"❌ Fehler: {result['message']}")
+                            st.error("❌ Fehler beim Hinzufügen des Logos")
                     else:
-                        st.error(f"❌ Logo-Verarbeitung fehlgeschlagen: {logo_result['message']}")
+                        st.error(f"❌ Logo-Verarbeitung fehlgeschlagen: {logo_result.get('error', 'Unbekannter Fehler')}")
                         
     except ImportError as e:
         st.error(f"Brand-Logo-Admin nicht verfügbar: {e}")
@@ -566,22 +551,21 @@ def render_logo_edit_section():
                     st.subheader("Bearbeiten")
                     
                     with st.form(f"edit_brand_form_{selected_brand}"):
-                        new_brand_name = st.text_input("Markenname", value=brand_data['brand_name'], key=f"edit_brand_name_field_{selected_brand}")
+                        new_brand_name = st.text_input("Markenname", value=brand_data['brand_name'])
                         new_category = st.selectbox("Kategorie", [
                             "", "PV Module", "Wechselrichter", "Batteriespeicher", 
                             "Wallbox", "Energiemanagement", "Sonstiges"
-                        ], index=0 if not brand_data.get('category') else ["", "PV Module", "Wechselrichter", "Batteriespeicher", "Wallbox", "Energiemanagement", "Sonstiges"].index(brand_data['category']) if brand_data['category'] in ["", "PV Module", "Wechselrichter", "Batteriespeicher", "Wallbox", "Energiemanagement", "Sonstiges"] else 0, key=f"edit_brand_category_field_{selected_brand}")
+                        ], index=0 if not brand_data.get('category') else ["", "PV Module", "Wechselrichter", "Batteriespeicher", "Wallbox", "Energiemanagement", "Sonstiges"].index(brand_data['category']) if brand_data['category'] in ["", "PV Module", "Wechselrichter", "Batteriespeicher", "Wallbox", "Energiemanagement", "Sonstiges"] else 0)
                         
-                        new_country = st.text_input("Land", value=brand_data.get('country', ''), key=f"edit_brand_country_field_{selected_brand}")
-                        new_website = st.text_input("Website", value=brand_data.get('website_url', ''), key=f"edit_brand_website_field_{selected_brand}")
-                        new_description = st.text_area("Beschreibung", value=brand_data.get('description', ''), key=f"edit_brand_description_field_{selected_brand}")
+                        new_country = st.text_input("Land", value=brand_data.get('country', ''))
+                        new_website = st.text_input("Website", value=brand_data.get('website_url', ''))
+                        new_description = st.text_area("Beschreibung", value=brand_data.get('description', ''))
                         
                         # Neues Logo optional
                         new_logo = st.file_uploader(
                             "Neues Logo (optional)", 
                             type=['png', 'jpg', 'jpeg', 'gif', 'webp'],
-                            help="Lassen Sie dies leer, um das bestehende Logo zu behalten",
-                            key=f"edit_brand_logo_upload_{selected_brand}"
+                            help="Lassen Sie dies leer, um das bestehende Logo zu behalten"
                         )
                         
                         if new_logo:
@@ -590,10 +574,10 @@ def render_logo_edit_section():
                         col_save, col_delete = st.columns(2)
                         
                         with col_save:
-                            save_submitted = st.form_submit_button("💾 Speichern", type="primary", key=f"save_brand_{selected_brand}")
+                            save_submitted = st.form_submit_button("� Speichern", type="primary")
                         
                         with col_delete:
-                            delete_submitted = st.form_submit_button("🗑️ Löschen", type="secondary", key=f"delete_brand_{selected_brand}")
+                            delete_submitted = st.form_submit_button("🗑️ Löschen", type="secondary")
                         
                         if save_submitted:
                             update_data = {
@@ -609,10 +593,10 @@ def render_logo_edit_section():
                                 logo_result = admin.process_logo_image(new_logo)
                                 if logo_result['success']:
                                     update_data.update({
-                                        'logo_base64': logo_result['base64'],
-                                        'file_extension': logo_result['extension'],
-                                        'logo_width': logo_result['width'],
-                                        'logo_height': logo_result['height'],
+                                        'logo_base64': logo_result['logo_base64'],
+                                        'file_extension': logo_result['file_extension'],
+                                        'logo_width': logo_result['logo_width'],
+                                        'logo_height': logo_result['logo_height'],
                                         'file_size_kb': logo_result['file_size_kb']
                                     })
                             
