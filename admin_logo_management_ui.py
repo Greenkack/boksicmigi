@@ -323,20 +323,458 @@ def render_logo_management_ui():
     st.title("🎨 Logo-Management")
     st.markdown("---")
     
-    # Tabs für verschiedene Bereiche
-    tab1, tab2, tab3, tab4 = st.tabs(["📤 Upload", "🗂️ Verwaltung", "� Positionen", "�📊 Statistiken"])
+    # Erweiterte Tabs mit allen CRUD-Funktionen integriert
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "📋 Übersicht", 
+        "➕ Hinzufügen", 
+        "✏️ Bearbeiten", 
+        "🔧 Tools",
+        "📤 Upload (Legacy)",
+        "🗂️ Verwaltung", 
+        "📊 Statistiken"
+    ])
     
     with tab1:
-        render_logo_upload_section()
+        render_logo_overview_section()
     
     with tab2:
-        render_logo_management_section()
+        render_logo_add_section()
     
     with tab3:
-        render_logo_positions_tab()
+        render_logo_edit_section()
     
     with tab4:
+        render_logo_tools_section()
+    
+    with tab5:
+        render_logo_upload_section()
+    
+    with tab6:
+        render_logo_management_section()
+        render_logo_positions_tab()
+    
+    with tab7:
         render_logo_statistics_section()
+
+
+def render_logo_overview_section():
+    """Rendert die Übersicht aller Logos"""
+    st.subheader("📋 Logo-Übersicht")
+    
+    if not LOGO_DB_AVAILABLE:
+        st.error("Logo-Datenbank nicht verfügbar!")
+        return
+    
+    try:
+        # Import der BrandLogoAdmin-Funktionalität
+        from admin_brand_logo_management_ui import BrandLogoAdmin
+        admin = BrandLogoAdmin()
+        
+        brands = admin.get_all_brands()
+        
+        if brands:
+            st.write(f"**{len(brands)} Marken-Logos verfügbar**")
+            
+            # Grid Layout für Logo-Vorschauen
+            cols = st.columns(4)
+            
+            for i, brand in enumerate(brands):
+                with cols[i % 4]:
+                    # Logo anzeigen wenn vorhanden
+                    logo_data = admin.get_brand_by_name(brand['brand_name'])
+                    if logo_data and logo_data['logo_base64']:
+                        try:
+                            logo_bytes = base64.b64decode(logo_data['logo_base64'])
+                            st.image(logo_bytes, width=150, caption=brand['brand_name'])
+                        except:
+                            st.write(f"🏷️ {brand['brand_name']}")
+                    else:
+                        st.write(f"🏷️ {brand['brand_name']}")
+                    
+                    st.write(f"**{brand['brand_name']}**")
+                    if brand.get('category'):
+                        st.caption(f"Kategorie: {brand['category']}")
+                    if brand.get('country'):
+                        st.caption(f"Land: {brand['country']}")
+                    
+                    # Edit/Delete Buttons
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("✏️", key=f"edit_{brand['id']}", help="Bearbeiten"):
+                            st.session_state.edit_brand_id = brand['id']
+                            st.rerun()
+                    with col2:
+                        if st.button("🗑️", key=f"delete_{brand['id']}", help="Löschen"):
+                            if admin.delete_brand_logo(brand['id']):
+                                st.success("Logo gelöscht!")
+                                st.rerun()
+            
+            # Tabelle als Alternative
+            st.subheader("Tabellenansicht")
+            import pandas as pd
+            df = pd.DataFrame(brands)
+            if not df.empty:
+                display_cols = ['brand_name', 'category', 'country', 'logo_width', 'logo_height', 'file_size_kb']
+                available_cols = [col for col in display_cols if col in df.columns]
+                st.dataframe(df[available_cols], use_container_width=True)
+        else:
+            st.info("Keine Marken-Logos vorhanden.")
+            
+    except ImportError as e:
+        st.error(f"Brand-Logo-Admin nicht verfügbar: {e}")
+        render_logo_management_section()  # Fallback auf bestehende Funktionalität
+
+
+def render_logo_add_section():
+    """Rendert die Sektion zum Hinzufügen neuer Logos"""
+    st.subheader("➕ Neues Marken-Logo hinzufügen")
+    
+    try:
+        from admin_brand_logo_management_ui import BrandLogoAdmin
+        admin = BrandLogoAdmin()
+        
+        with st.form("add_brand_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Hersteller aus Produktdatenbank laden
+                manufacturers = admin.get_manufacturers_from_products()
+                
+                brand_name_option = st.radio(
+                    "Markenname wählen",
+                    ["Aus Produktdatenbank", "Manuell eingeben"]
+                )
+                
+                if brand_name_option == "Aus Produktdatenbank":
+                    brand_name = st.selectbox("Hersteller aus Produkten", [""] + manufacturers)
+                else:
+                    brand_name = st.text_input("Markenname*")
+                
+                category = st.selectbox("Kategorie", [
+                    "", "PV Module", "Wechselrichter", "Batteriespeicher", 
+                    "Wallbox", "Energiemanagement", "Sonstiges"
+                ])
+                country = st.text_input("Herstellerland")
+                website_url = st.text_input("Website URL")
+                
+            with col2:
+                description = st.text_area("Beschreibung")
+                
+                # Logo Upload
+                uploaded_logo = st.file_uploader(
+                    "Logo-Datei*", 
+                    type=['png', 'jpg', 'jpeg', 'gif', 'webp'],
+                    help="Empfohlen: PNG mit transparentem Hintergrund, max. 300x300px"
+                )
+                
+                if uploaded_logo:
+                    # Logo-Vorschau
+                    st.image(uploaded_logo, width=200, caption="Logo-Vorschau")
+            
+            submitted = st.form_submit_button("Logo hinzufügen")
+            
+            if submitted:
+                if not brand_name or not uploaded_logo:
+                    st.error("Markenname und Logo-Datei sind Pflichtfelder!")
+                else:
+                    # Logo verarbeiten
+                    logo_result = admin.process_logo_image(uploaded_logo)
+                    
+                    if logo_result['success']:
+                        result = admin.add_brand_logo(
+                            brand_name=brand_name,
+                            logo_base64=logo_result['base64'],
+                            file_extension=logo_result['extension'],
+                            description=description,
+                            website_url=website_url,
+                            country=country,
+                            category=category,
+                            logo_width=logo_result['width'],
+                            logo_height=logo_result['height'],
+                            file_size_kb=logo_result['file_size_kb']
+                        )
+                        
+                        if result['success']:
+                            st.success(f"✅ Logo für '{brand_name}' erfolgreich hinzugefügt!")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Fehler: {result['message']}")
+                    else:
+                        st.error(f"❌ Logo-Verarbeitung fehlgeschlagen: {logo_result['message']}")
+                        
+    except ImportError as e:
+        st.error(f"Brand-Logo-Admin nicht verfügbar: {e}")
+        render_logo_upload_section()  # Fallback
+
+
+def render_logo_edit_section():
+    """Rendert die Sektion zum Bearbeiten von Logos"""
+    st.subheader("✏️ Logos bearbeiten")
+    
+    try:
+        from admin_brand_logo_management_ui import BrandLogoAdmin
+        admin = BrandLogoAdmin()
+        
+        # Logo zur Bearbeitung auswählen
+        brands = admin.get_all_brands()
+        
+        if not brands:
+            st.info("Keine Logos zum Bearbeiten vorhanden.")
+            return
+        
+        # Brand-Namen für Selectbox
+        brand_names = [brand['brand_name'] for brand in brands]
+        
+        selected_brand = st.selectbox(
+            "Logo zum Bearbeiten auswählen:",
+            [""] + brand_names
+        )
+        
+        if selected_brand:
+            # Aktuelle Daten laden
+            brand_data = admin.get_brand_by_name(selected_brand)
+            
+            if brand_data:
+                # Aktuelle Logo-Anzeige
+                col1, col2 = st.columns([1, 2])
+                
+                with col1:
+                    st.subheader("Aktuelles Logo")
+                    if brand_data['logo_base64']:
+                        try:
+                            logo_bytes = base64.b64decode(brand_data['logo_base64'])
+                            st.image(logo_bytes, width=200)
+                        except:
+                            st.error("Logo-Anzeige fehlgeschlagen")
+                
+                with col2:
+                    st.subheader("Bearbeiten")
+                    
+                    with st.form(f"edit_brand_form_{selected_brand}"):
+                        new_brand_name = st.text_input("Markenname", value=brand_data['brand_name'])
+                        new_category = st.selectbox("Kategorie", [
+                            "", "PV Module", "Wechselrichter", "Batteriespeicher", 
+                            "Wallbox", "Energiemanagement", "Sonstiges"
+                        ], index=0 if not brand_data.get('category') else ["", "PV Module", "Wechselrichter", "Batteriespeicher", "Wallbox", "Energiemanagement", "Sonstiges"].index(brand_data['category']) if brand_data['category'] in ["", "PV Module", "Wechselrichter", "Batteriespeicher", "Wallbox", "Energiemanagement", "Sonstiges"] else 0)
+                        
+                        new_country = st.text_input("Land", value=brand_data.get('country', ''))
+                        new_website = st.text_input("Website", value=brand_data.get('website_url', ''))
+                        new_description = st.text_area("Beschreibung", value=brand_data.get('description', ''))
+                        
+                        # Neues Logo optional
+                        new_logo = st.file_uploader(
+                            "Neues Logo (optional)", 
+                            type=['png', 'jpg', 'jpeg', 'gif', 'webp'],
+                            help="Lassen Sie dies leer, um das bestehende Logo zu behalten"
+                        )
+                        
+                        if new_logo:
+                            st.image(new_logo, width=200, caption="Neues Logo-Vorschau")
+                        
+                        col_save, col_delete = st.columns(2)
+                        
+                        with col_save:
+                            save_submitted = st.form_submit_button("� Speichern", type="primary")
+                        
+                        with col_delete:
+                            delete_submitted = st.form_submit_button("🗑️ Löschen", type="secondary")
+                        
+                        if save_submitted:
+                            update_data = {
+                                'brand_name': new_brand_name,
+                                'category': new_category,
+                                'country': new_country,
+                                'website_url': new_website,
+                                'description': new_description
+                            }
+                            
+                            # Neues Logo verarbeiten falls vorhanden
+                            if new_logo:
+                                logo_result = admin.process_logo_image(new_logo)
+                                if logo_result['success']:
+                                    update_data.update({
+                                        'logo_base64': logo_result['base64'],
+                                        'file_extension': logo_result['extension'],
+                                        'logo_width': logo_result['width'],
+                                        'logo_height': logo_result['height'],
+                                        'file_size_kb': logo_result['file_size_kb']
+                                    })
+                            
+                            if admin.update_brand_logo(brand_data['id'], update_data):
+                                st.success("✅ Logo erfolgreich aktualisiert!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Fehler beim Aktualisieren des Logos")
+                        
+                        if delete_submitted:
+                            if admin.delete_brand_logo(brand_data['id']):
+                                st.success("✅ Logo erfolgreich gelöscht!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Fehler beim Löschen des Logos")
+                        
+    except ImportError as e:
+        st.error(f"Brand-Logo-Admin nicht verfügbar: {e}")
+
+
+def render_logo_tools_section():
+    """Rendert die Tools-Sektion"""
+    st.subheader("🔧 Logo-Tools")
+    
+    try:
+        from admin_brand_logo_management_ui import BrandLogoAdmin
+        admin = BrandLogoAdmin()
+        
+        # Backup/Export Tools
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 📦 Export & Backup")
+            
+            if st.button("📄 Alle Logos exportieren (JSON)"):
+                brands = admin.get_all_brands()
+                if brands:
+                    import json
+                    export_data = {
+                        'export_date': datetime.now().isoformat(),
+                        'total_logos': len(brands),
+                        'brands': brands
+                    }
+                    
+                    json_str = json.dumps(export_data, indent=2, ensure_ascii=False)
+                    st.download_button(
+                        label="📥 JSON herunterladen",
+                        data=json_str,
+                        file_name=f"logo_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json"
+                    )
+                else:
+                    st.info("Keine Logos zum Exportieren vorhanden.")
+            
+            if st.button("🗃️ Datenbank-Backup erstellen"):
+                st.info("Backup-Funktionalität wird in der nächsten Version verfügbar sein.")
+        
+        with col2:
+            st.markdown("### 🧹 Bereinigung")
+            
+            if st.button("🔍 Doppelte Logos suchen"):
+                brands = admin.get_all_brands()
+                duplicates = []
+                seen_names = {}
+                
+                for brand in brands:
+                    name = brand['brand_name'].lower().strip()
+                    if name in seen_names:
+                        duplicates.append((brand, seen_names[name]))
+                    else:
+                        seen_names[name] = brand
+                
+                if duplicates:
+                    st.warning(f"⚠️ {len(duplicates)} mögliche Duplikate gefunden:")
+                    for dup_pair in duplicates:
+                        st.write(f"- {dup_pair[0]['brand_name']} (ID: {dup_pair[0]['id']}) vs {dup_pair[1]['brand_name']} (ID: {dup_pair[1]['id']})")
+                else:
+                    st.success("✅ Keine Duplikate gefunden!")
+            
+            if st.button("📏 Logo-Größen optimieren"):
+                st.info("Optimierungs-Tool wird in der nächsten Version verfügbar sein.")
+        
+        # Bulk-Operationen
+        st.markdown("### 🔄 Bulk-Operationen")
+        
+        brands = admin.get_all_brands()
+        if brands:
+            brand_names = [brand['brand_name'] for brand in brands]
+            
+            selected_brands = st.multiselect(
+                "Logos für Bulk-Operationen auswählen:",
+                brand_names
+            )
+            
+            if selected_brands:
+                col_bulk1, col_bulk2, col_bulk3 = st.columns(3)
+                
+                with col_bulk1:
+                    new_category = st.selectbox("Kategorie setzen", [
+                        "Nicht ändern", "PV Module", "Wechselrichter", "Batteriespeicher", 
+                        "Wallbox", "Energiemanagement", "Sonstiges"
+                    ])
+                
+                with col_bulk2:
+                    new_country = st.text_input("Land setzen (leer = nicht ändern)")
+                
+                with col_bulk3:
+                    if st.button("🔄 Bulk-Update ausführen"):
+                        success_count = 0
+                        
+                        for brand_name in selected_brands:
+                            brand_data = admin.get_brand_by_name(brand_name)
+                            if brand_data:
+                                update_data = {}
+                                
+                                if new_category != "Nicht ändern":
+                                    update_data['category'] = new_category
+                                    
+                                if new_country.strip():
+                                    update_data['country'] = new_country.strip()
+                                
+                                if update_data and admin.update_brand_logo(brand_data['id'], update_data):
+                                    success_count += 1
+                        
+                        st.success(f"✅ {success_count} von {len(selected_brands)} Logos aktualisiert!")
+                        if success_count > 0:
+                            st.rerun()
+        
+        # Import-Tools
+        st.markdown("### 📥 Import")
+        
+        uploaded_import = st.file_uploader(
+            "Logos aus JSON importieren",
+            type=['json'],
+            help="Importiert Logos aus einer zuvor exportierten JSON-Datei"
+        )
+        
+        if uploaded_import:
+            try:
+                import json
+                import_data = json.loads(uploaded_import.getvalue().decode('utf-8'))
+                
+                if 'brands' in import_data:
+                    brands_to_import = import_data['brands']
+                    st.info(f"📋 {len(brands_to_import)} Logos zum Import gefunden")
+                    
+                    if st.button("🚀 Import starten"):
+                        success_count = 0
+                        error_count = 0
+                        
+                        for brand in brands_to_import:
+                            try:
+                                # Prüfen ob bereits vorhanden
+                                existing = admin.get_brand_by_name(brand['brand_name'])
+                                if not existing:
+                                    result = admin.add_brand_logo(**brand)
+                                    if result['success']:
+                                        success_count += 1
+                                    else:
+                                        error_count += 1
+                                else:
+                                    st.warning(f"Logo '{brand['brand_name']}' bereits vorhanden - übersprungen")
+                            except Exception as e:
+                                error_count += 1
+                                st.error(f"Fehler bei '{brand.get('brand_name', 'Unbekannt')}': {e}")
+                        
+                        st.success(f"✅ Import abgeschlossen: {success_count} erfolgreich, {error_count} Fehler")
+                        if success_count > 0:
+                            st.rerun()
+                else:
+                    st.error("❌ Ungültiges Import-Format")
+                    
+            except Exception as e:
+                st.error(f"❌ Import-Fehler: {e}")
+                
+    except ImportError as e:
+        st.error(f"Brand-Logo-Admin nicht verfügbar: {e}")
+        st.info("Tools-Funktionalität erfordert das Brand-Logo-Admin-Modul.")
 
 def render_logo_positions_tab():
     """Rendert den Tab für Logo-Positionen"""
