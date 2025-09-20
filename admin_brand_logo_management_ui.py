@@ -57,7 +57,7 @@ class BrandLogoAdmin:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, brand_name, description, website_url, country, 
-                       category, logo_width, logo_height, file_size_kb, 
+                       category, logo_width, logo_height, file_size_bytes, 
                        created_at, updated_at
                 FROM brand_logos 
                 ORDER BY brand_name
@@ -98,21 +98,21 @@ class BrandLogoAdmin:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO brand_logos (
-                    brand_name, logo_base64, file_extension, description,
+                    brand_name, logo_base64, logo_format, description,
                     website_url, country, category, logo_width, logo_height,
-                    file_size_kb, updated_at
+                    file_size_bytes, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 brand_data['brand_name'],
                 brand_data['logo_base64'],
-                brand_data['file_extension'],
-                brand_data['description'],
-                brand_data['website_url'],
-                brand_data['country'],
-                brand_data['category'],
-                brand_data['logo_width'],
-                brand_data['logo_height'],
-                brand_data['file_size_kb'],
+                brand_data.get('file_extension', 'png'),  # Map file_extension to logo_format
+                brand_data.get('description', ''),
+                brand_data.get('website_url', ''),
+                brand_data.get('country', ''),
+                brand_data.get('category', ''),
+                brand_data.get('logo_width', 0),
+                brand_data.get('logo_height', 0),
+                brand_data.get('file_size_kb', 0) * 1024,  # Convert KB to bytes
                 datetime.now().isoformat()
             ))
             conn.commit()
@@ -133,22 +133,22 @@ class BrandLogoAdmin:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE brand_logos SET
-                    brand_name = ?, logo_base64 = ?, file_extension = ?,
+                    brand_name = ?, logo_base64 = ?, logo_format = ?,
                     description = ?, website_url = ?, country = ?, category = ?,
-                    logo_width = ?, logo_height = ?, file_size_kb = ?,
+                    logo_width = ?, logo_height = ?, file_size_bytes = ?,
                     updated_at = ?
                 WHERE id = ?
             """, (
                 brand_data['brand_name'],
                 brand_data['logo_base64'],
-                brand_data['file_extension'],
-                brand_data['description'],
-                brand_data['website_url'],
-                brand_data['country'],
-                brand_data['category'],
-                brand_data['logo_width'],
-                brand_data['logo_height'],
-                brand_data['file_size_kb'],
+                brand_data.get('file_extension', 'png'),  # Map file_extension to logo_format
+                brand_data.get('description', ''),
+                brand_data.get('website_url', ''),
+                brand_data.get('country', ''),
+                brand_data.get('category', ''),
+                brand_data.get('logo_width', 0),
+                brand_data.get('logo_height', 0),
+                brand_data.get('file_size_kb', 0) * 1024,  # Convert KB to bytes
                 datetime.now().isoformat(),
                 brand_id
             ))
