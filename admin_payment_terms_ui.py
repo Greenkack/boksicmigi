@@ -614,7 +614,7 @@ def render_payment_options_management(payment_options: List[Dict[str, Any]], wid
                     
                     fin_opt['max_amount'] = col_fee3.number_input(
                         f"Max. Betrag (€)",
-                        value=float(fin_opt.get('max_amount', 100000.0)),
+                        value=max(float(fin_opt.get('max_amount', 100000.0)), 1000.0),
                         min_value=1000.0,
                         step=1000.0,
                         key=f"fin_max_{option_id}_{k}_{widget_suffix}"
@@ -644,7 +644,7 @@ def render_payment_options_management(payment_options: List[Dict[str, Any]], wid
                     
                     leasing_opt['monthly_rate_factor'] = col_lease2.number_input(
                         "Monatsfaktor (%)",
-                        value=float(leasing_opt.get('monthly_rate_factor', 1.2)),
+                        value=max(float(leasing_opt.get('monthly_rate_factor', 1.2)), 0.5),
                         min_value=0.5,
                         max_value=5.0,
                         step=0.1,
@@ -661,7 +661,7 @@ def render_payment_options_management(payment_options: List[Dict[str, Any]], wid
                     if leasing_opt.get('buyout_option', True):
                         leasing_opt['buyout_percentage'] = st.number_input(
                             "Kaufpreis am Ende (%)",
-                            value=float(leasing_opt.get('buyout_percentage', 10.0)),
+                            value=max(float(leasing_opt.get('buyout_percentage', 10.0)), 1.0),
                             min_value=1.0,
                             max_value=50.0,
                             step=1.0,
