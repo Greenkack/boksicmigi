@@ -285,55 +285,104 @@ def update_logo_position(brand_name: str, position_x: float, position_y: float,
         print(f"Fehler beim Aktualisieren der Logo-Position für '{brand_name}': {e}")
         return False
 
+def _normalize_brand_key(name: str) -> str:
+    if not name:
+        return ""
+    return name.strip().lower().replace(" ", "")
+
+def _base_brand_without_suffix(name: str) -> str:
+    """Entfernt angehängte funktionale Suffixe wie PV / WR / SPEICHER / ESS / BATTERIE / AKKU / STROMSPEICHER"""
+    if not name:
+        return name
+    import re
+    base = name.strip()
+    pattern = re.compile(r"^(.*?)(pv|wr|speicher|ess|batterie|akku|stromspeicher)$", re.IGNORECASE)
+    prev = None
+    while base and prev != base:
+        prev = base
+        m = pattern.match(base)
+        if m and m.group(1).strip():
+            base = m.group(1).strip()
+    return base
+
+def _fetch_all_brand_rows(conn) -> Dict[str, Dict[str, Any]]:
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT brand_name, logo_base64, logo_format, file_size_bytes,
+               logo_position_x, logo_position_y, logo_width, logo_height,
+               is_active, created_at, updated_at
+        FROM brand_logos
+        WHERE is_active = 1
+    """)
+    rows = cursor.fetchall()
+    data: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        data[r[0]] = {
+            'brand_name': r[0],
+            'logo_base64': r[1],
+            'logo_format': r[2],
+            'file_size_bytes': r[3],
+            'logo_position_x': r[4],
+            'logo_position_y': r[5],
+            'logo_width': r[6],
+            'logo_height': r[7],
+            'is_active': r[8],
+            'created_at': r[9],
+            'updated_at': r[10]
+        }
+    return data
+
 def get_logos_for_brands(brand_names: List[str]) -> Dict[str, Dict[str, Any]]:
-    """Holt Logos für eine Liste von Herstellern"""
+    """Holt Logos für eine Liste von Herstellern.
+    Erweitert: Versucht auch Varianten ohne funktionale Suffixe zu matchen.
+    Reihenfolge je Marke:
+      1. Exakter Name
+      2. Name ohne Leerzeichen (Fallback bereits durch Aufrufer evtl.)
+      3. Basis ohne Suffix (PV/WR/SPEICHER/ESS/BATTERIE/AKKU/STROMSPEICHER)
+      4. Groß/Klein ignorieren
+    Liefert dict mit Key des tatsächlich gefundenen DB-Namens.
+    """
     if not DB_AVAILABLE:
         return {}
-    
     try:
         conn = get_db_connection()
         if not conn:
             return {}
-        
-        # Tabelle erstellen falls sie nicht existiert
         create_brand_logos_table(conn)
-        
-        cursor = conn.cursor()
-        
-        # Placeholder für IN-Klausel erstellen
-        placeholders = ','.join('?' * len(brand_names))
-        
-        cursor.execute(f"""
-            SELECT brand_name, logo_base64, logo_format, file_size_bytes,
-                   logo_position_x, logo_position_y, logo_width, logo_height,
-                   is_active, created_at, updated_at
-            FROM brand_logos 
-            WHERE brand_name IN ({placeholders}) AND is_active = 1
-        """, brand_names)
-        
-        results = cursor.fetchall()
+        # Alle aktiven Logos einmal holen
+        all_rows = _fetch_all_brand_rows(conn)
         conn.close()
-        
-        logos_dict = {}
-        for result in results:
-            logos_dict[result[0]] = {
-                'brand_name': result[0],
-                'logo_base64': result[1],
-                'logo_format': result[2],
-                'file_size_bytes': result[3],
-                'logo_position_x': result[4],
-                'logo_position_y': result[5],
-                'logo_width': result[6],
-                'logo_height': result[7],
-                'is_active': result[8],
-                'created_at': result[9],
-                'updated_at': result[10]
-            }
-        
-        return logos_dict
-        
+
+        # Indexe bauen
+        index_exact = {k: v for k, v in all_rows.items()}
+        index_norm = {_normalize_brand_key(k): v for k, v in all_rows.items()}
+        index_base = {_normalize_brand_key(_base_brand_without_suffix(k)): v for k, v in all_rows.items()}
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for wanted in brand_names:
+            if not wanted:
+                continue
+            # 1. Exakt
+            if wanted in index_exact:
+                result[wanted] = index_exact[wanted]
+                continue
+            norm = _normalize_brand_key(wanted)
+            base = _normalize_brand_key(_base_brand_without_suffix(wanted))
+            # 2. Normalisiert (Spaces entfernt, lower)
+            if norm in index_norm:
+                result[wanted] = index_norm[norm]
+                continue
+            # 3. Basis ohne Suffix
+            if base in index_base:
+                result[wanted] = index_base[base]
+                continue
+            # 4. Versuche zusätzlich Groß/Klein Variation des Basis-Originals
+            # (bereits durch lower abgedeckt – hier keine Extra-Logik nötig)
+            # Wenn kein Treffer: Debug-Hinweis (einmal pro Marke)
+            print(f"Kein Logo-Match für {wanted} inkl. Varianten")
+        return result
     except Exception as e:
-        print(f"Fehler beim Abrufen der Logos für Herstellerliste: {e}")
+        print(f"Fehler beim erweiterten Logo-Matching: {e}")
         return {}
 
 def deactivate_brand_logo(brand_name: str) -> bool:

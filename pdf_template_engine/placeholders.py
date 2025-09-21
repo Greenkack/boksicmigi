@@ -378,10 +378,6 @@ PLACEHOLDER_MAPPING.update({
     # Variante mit Zusatz "anbei" aus coords/seite4.yml
     "siehe Produktdatenblatt anbei": "module_guarantee_combined",
     
-    # Logo-Platzhalter für Seite 4 (werden als Bilder gerendert statt als Text)
-    "Logomodul": "module_brand_logo_b64",
-    "Logoricht": "inverter_brand_logo_b64", 
-    "Logoakkus": "storage_brand_logo_b64",
 })
 
 
@@ -1453,16 +1449,16 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         # Erweiterung: behutsame Synonym-Suche in den direkten DB-Feldern (ohne Fuzzy, nur gängige Aliase)
         synonyms_map_db: Dict[str, list] = {
             "module_cell_technology": [
-                "technology", "celltech", "pv_cell_technology", "zelltechnologie", "PV-Zellentechnologie", "PV Zellentechnologie",
+                "technology", "celltech", "pv_cell_technology", "pvcelltechnology", "zelltechnologie", "pv-zellentechnologie", "pv zellentechnologie", "PV-Zellentechnologie", "PV Zellentechnologie", "n-type", "p-type",
             ],
             "module_structure": [
-                "structure", "module_build", "aufbau", "modulaufbau", "Modulaufbau", "glas_typ", "glasstruktur",
+                "structure", "module_build", "aufbau", "modulaufbau", "Modulaufbau", "glas_typ", "glasstruktur", "frame", "bauweise", "glas-glas", "glas folie",
             ],
             "module_cell_type": [
-                "solar_cells", "cells", "solar_cell_type", "zelltyp", "Solarzellen", "cellcount", "cell_count",
+                "solar_cells", "cells", "solar_cell_type", "zelltyp", "Solarzellen", "cellcount", "cell_count", "mono", "monokristallin", "polykristallin", "halfcut",
             ],
             "module_version": [
-                "module_version", "variant", "ausfuehrung", "modulversion", "Version", "version_label",
+                "module_version", "variant", "ausfuehrung", "ausführung", "modulversion", "Version", "version_label", "black", "fullblack", "allblack",
             ],
         }
         for out_k, alt_keys in synonyms_map_db.items():
@@ -1557,10 +1553,10 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
 
                     # Synonyme je Ausgabefeld
                     synonyms_map_attr: Dict[str, list] = {
-                        "module_cell_technology": ["technology", "pv_cell_technology", "zelltechnologie", "pv zellentechnologie", "pv-zellentechnologie"],
-                        "module_structure": ["structure", "module_build", "aufbau", "modulaufbau", "modulaufbau"],
-                        "module_cell_type": ["solar_cells", "cells", "solar_cell_type", "zelltyp", "solarzellen", "cellcount", "cell_count"],
-                        "module_version": ["module_version", "variant", "ausfuehrung", "ausführung", "modulversion", "version", "version_label"],
+                        "module_cell_technology": ["technology", "pv_cell_technology", "zelltechnologie", "pv zellentechnologie", "pv-zellentechnologie", "n-type", "p-type", "topcon", "heterojunction", "perc"],
+                        "module_structure": ["structure", "module_build", "aufbau", "modulaufbau", "modulaufbau", "glas-glas", "glas folie", "frame"],
+                        "module_cell_type": ["solar_cells", "cells", "solar_cell_type", "zelltyp", "solarzellen", "cellcount", "cell_count", "mono", "monokristallin", "polykristallin", "halfcut"],
+                        "module_version": ["module_version", "variant", "ausfuehrung", "ausführung", "modulversion", "version", "version_label", "black", "fullblack", "allblack"],
                         "module_guarantee_combined": ["garantie", "garantietext", "module_warranty_text", "garantie_text", "warranty_text"],
                     }
                     canon_map = {
@@ -1648,6 +1644,17 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
     # Garantiefallback nur, wenn leer
     if not result.get("module_guarantee_combined"):
         result["module_guarantee_combined"] = "siehe Produktdatenblatt"
+
+    # Letzte Fallback Defaults für Anzeige (verhindert 'None')
+    fallback_display = {
+        "module_cell_technology": "k.A.",
+        "module_structure": "k.A.",
+        "module_cell_type": "k.A.",
+        "module_version": "k.A.",
+    }
+    for fk, fv in fallback_display.items():
+        if not result.get(fk):
+            result[fk] = fv
 
     # DEBUG: Modul-Seite4 Attribute (temporär, zur Validierung der neuen Mappings)
     try:

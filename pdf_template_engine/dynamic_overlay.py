@@ -413,38 +413,9 @@ def generate_overlay(coords_dir: Path, dynamic_data: Dict[str, str], total_pages
         for elem in elements:
             text = elem.get("text", "")
             key = PLACEHOLDER_MAPPING.get(text)
-            
-            # Spezielle Behandlung für Logo-Platzhalter (als Bilder rendern)
             if text in ["Logomodul", "Logoricht", "Logoakkus"]:
-                print(f"DEBUG: Logo-Platzhalter gefunden: {text}")
-                logo_b64 = dynamic_data.get(key, "") if key else ""
-                print(f"DEBUG: Logo-Key: {key}, Logo-Daten vorhanden: {bool(logo_b64)}")
-                if logo_b64:
-                    img = _as_image_reader(logo_b64)
-                    print(f"DEBUG: Image Reader erfolgreich: {img is not None}")
-                    if img is not None:
-                        pos = elem.get("position", (0, 0, 0, 0))
-                        if len(pos) == 4:
-                            x0, y0, x1, y1 = pos
-                            logo_width = x1 - x0
-                            logo_height = y1 - y0
-                            logo_x = x0
-                            logo_y = page_height - y1
-                            
-                            print(f"DEBUG: Logo {text} wird gerendert an Position ({logo_x}, {logo_y}) mit Größe ({logo_width}, {logo_height})")
-                            
-                            c.saveState()
-                            try:
-                                c.drawImage(img, logo_x, logo_y, width=logo_width, height=logo_height, 
-                                          preserveAspectRatio=True, mask='auto')
-                                print(f"DEBUG: Logo {text} erfolgreich gerendert!")
-                            except Exception as e:
-                                print(f"Fehler beim Rendern von {text}: {e}")
-                            finally:
-                                c.restoreState()
-                else:
-                    print(f"DEBUG: Kein Logo-Data für {text} (Key: {key})")
-                continue  # Logo ist gerendert, nicht als Text behandeln
+                # Platzhalter komplett überspringen (Legacy entfernt)
+                continue
             
             # Normale Text-Behandlung
             draw_text = (dynamic_data.get(key, "") if key else text)
@@ -797,13 +768,13 @@ def _draw_page4_component_images(c: canvas.Canvas, dynamic_data: Dict[str, str],
     """
     try:
         images = [
-            (dynamic_data.get("module_image_b64"), {
+            (dynamic_data.get("storage_image_b64"), {
                 "x": 50.0, "y_top": page_height - 250.0, "max_w": 140.0, "max_h": 90.0
             }),
             (dynamic_data.get("inverter_image_b64"), {
                 "x": 50.0, "y_top": page_height - 440.0, "max_w": 140.0, "max_h": 90.0
             }),
-            (dynamic_data.get("storage_image_b64"), {
+            (dynamic_data.get("modul_image_b64"), {
                 "x": 50.0, "y_top": page_height - 630.0, "max_w": 140.0, "max_h": 90.0
             }),
         ]
@@ -836,9 +807,9 @@ def _draw_page4_brand_logos(c: canvas.Canvas, dynamic_data: Dict[str, str], page
 
     Verwendet Admin-Setting 'pdf_logo_positions' (Struktur wie DEFAULT_POSITIONS in admin_logo_positions_ui.py):
     {
-        "modul": {"x": 520, "y": 180, "width": 60, "height": 30},
+        "Batteriespeicher": {"x": 520, "y": 180, "width": 60, "height": 30},
         "wechselrichter": {"x": 520, "y": 370, ...},
-        "batteriespeicher": {"x": 520, "y": 560, ...}
+        "modul": {"x": 520, "y": 560, ...}
     }
 
     Koordinatensystem (Admin-UI): X links->rechts, Y unten->oben.
@@ -847,16 +818,17 @@ def _draw_page4_brand_logos(c: canvas.Canvas, dynamic_data: Dict[str, str], page
     try:
         # Logos aus dynamic_data
         logo_keys = {
-            "modul": "module_brand_logo_b64",
+            "batteriespeicher": "module_brand_logo_b64",
             "wechselrichter": "inverter_brand_logo_b64",
-            "batteriespeicher": "storage_brand_logo_b64",
+            "modul": "storage_brand_logo_b64",
         }
 
         # Admin-Positionen laden (Fallback auf Defaults falls Setting fehlt)
+        # Die Default-Y Positionen sind Platzhalter, werden aber bei aktivierter Titel-Ausrichtung überschrieben.
         default_positions = {
-            "modul": {"x": 520.0, "y": 180.0, "width": 60.0, "height": 30.0},
+            "batteriespeicher": {"x": 520.0, "y": 180.0, "width": 60.0, "height": 30.0},
             "wechselrichter": {"x": 520.0, "y": 370.0, "width": 60.0, "height": 30.0},
-            "batteriespeicher": {"x": 520.0, "y": 560.0, "width": 60.0, "height": 30.0},
+            "modul": {"x": 520.0, "y": 560.0, "width": 60.0, "height": 30.0},
         }
         try:
             positions = load_admin_setting("pdf_logo_positions", default_positions) or default_positions
@@ -864,6 +836,142 @@ def _draw_page4_brand_logos(c: canvas.Canvas, dynamic_data: Dict[str, str], page
                 positions = default_positions
         except Exception:
             positions = default_positions
+
+        # Debug-Ausgabe der rohen geladenen Admin-Positionen (vor jeglicher Modifikation)
+        try:
+            print(f"DEBUG LOGO POSITIONS geladen (roh): {positions}")
+        except Exception:
+            pass
+
+        # Manueller Modus: Admin-Positionen strikt verwenden (kein Titel-Alignment)
+        try:
+            manual_mode = load_admin_setting("pdf_logo_manual_mode", False)
+        except Exception:
+            manual_mode = False
+
+        # Titel-Ausrichtung aktiv?
+        try:
+            align_with_titles = load_admin_setting("pdf_logo_align_with_titles", True) and not manual_mode
+        except Exception:
+            align_with_titles = not manual_mode
+
+        # Erkennen ob Admin Positionen individuell angepasst wurden (Abweichung von Defaults)
+        admin_customized = False
+        try:
+            for cat, dfl in default_positions.items():
+                p = positions.get(cat, {})
+                dx = abs(float(p.get("x", dfl["x"])) - dfl["x"])
+                dy = abs(float(p.get("y", dfl["y"])) - dfl["y"])
+                if dx > 0.01 or dy > 0.01:
+                    admin_customized = True
+                    break
+        except Exception:
+            pass
+
+        # Wenn Admin manuell angepasst hat, Alignment aber aktiviert ist, schalten wir Alignment automatisch AUS,
+        # außer der Admin erzwingt es explizit mit Setting 'pdf_logo_keep_alignment_when_customized'.
+        if admin_customized and not manual_mode:
+            try:
+                keep_align = load_admin_setting("pdf_logo_keep_alignment_when_customized", False)
+            except Exception:
+                keep_align = False
+            if align_with_titles and not keep_align:
+                align_with_titles = False
+                print("DEBUG LOGO AUTO-DISABLE ALIGN: Admin-Positionen weichen von Defaults ab -> benutze Admin-Y")
+            else:
+                if align_with_titles:
+                    print("DEBUG LOGO ALIGN trotz Admin-Anpassung aktiv (keep_alignment_when_customized=True)")
+
+        # Optionale vertikale Offsets (in pt) je Kategorie für Feintuning
+        try:
+            vertical_offsets = load_admin_setting("pdf_logo_vertical_offsets", {}) or {}
+            if not isinstance(vertical_offsets, dict):
+                vertical_offsets = {}
+        except Exception:
+            vertical_offsets = {}
+
+        title_y_centers: Dict[str, float] = {}
+        if align_with_titles:
+            # Wir lesen coords/seite4.yml und suchen die Überschriften SOLARMODULE / WECHSELRICHTER / BATTERIESPEICHER.
+            # Format:
+            # Text: SOLARMODULE\n
+            # Position: (x1, y1, x2, y2)
+            import os, re
+            coords_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "coords", "seite4.yml")
+            try:
+                with open(coords_path, "r", encoding="utf-8") as fh:
+                    lines = fh.readlines()
+                current_text = None
+                pattern = re.compile(r"Position:\s*\(([^)]*)\)")
+                for line in lines:
+                    if line.startswith("Text:"):
+                        current_text = line.split("Text:", 1)[1].strip()
+                    elif line.startswith("Position:") and current_text:
+                        m = pattern.search(line)
+                        if m:
+                            parts = [p.strip() for p in m.group(1).split(",") if p.strip()]
+                            if len(parts) == 4:
+                                try:
+                                    _, y1, _, y2 = [float(p) for p in parts]
+                                    y_center = (y1 + y2) / 2.0
+                                    key_map = {
+                                        "SOLARMODULE": "modul",
+                                        "WECHSELRICHTER": "wechselrichter",
+                                        "BATTERIESPEICHER": "batteriespeicher",
+                                    }
+                                    cat = key_map.get(current_text)
+                                    if cat and cat not in title_y_centers:
+                                        title_y_centers[cat] = y_center
+                                except Exception:
+                                    pass
+                        current_text = None
+            except Exception as e:
+                print(f"DEBUG LOGO ALIGN Titles Laden Fehler: {e}")
+
+        # Wenn wir valide y-Center haben, überschreiben wir die Y-Werte (nur vertikal) der Position-Boxen
+        if align_with_titles and title_y_centers:
+            # Optional benutzerdefinierte Reihenfolge (z.B. ['modul','wechselrichter','batteriespeicher'])
+            try:
+                custom_order = load_admin_setting("pdf_logo_custom_order", []) or []
+                if not custom_order:
+                    # Fallback harte Wunsch-Reihenfolge
+                    custom_order = ["modul", "wechselrichter", "batteriespeicher"]
+                if not isinstance(custom_order, list):
+                    custom_order = []
+            except Exception:
+                custom_order = ["modul", "wechselrichter", "batteriespeicher"]
+
+            # Falls custom_order gesetzt ist und alle Kategorien enthält, verteilen wir die Y-Center gemäß Sortierung (oben->unten) nach den vorhandenen Y-Werten sortiert.
+            if len(custom_order) == 3 and set(custom_order) == set(title_y_centers.keys()):
+                # Sortiere existierende Zentren nach Y (aufsteigend) -> unterste zuerst
+                centers_sorted = sorted(title_y_centers.items(), key=lambda kv: kv[1])
+                # Weisen von unten nach oben den gewünschten Kategorien ihre Ziel-Y zu.
+                # Ziel: custom_order[0] soll ganz oben, also größtes Y bekommen.
+                mapping: dict[str, float] = {}
+                # centers_sorted: lowest .. highest
+                only_y = [c for _, c in centers_sorted]
+                only_y_sorted_desc = sorted(only_y, reverse=True)
+                for idx, cat in enumerate(custom_order):
+                    if idx < len(only_y_sorted_desc):
+                        mapping[cat] = only_y_sorted_desc[idx]
+                # Ersetze title_y_centers durch mapping (nur wo zugewiesen)
+                for cat, new_center in mapping.items():
+                    title_y_centers[cat] = new_center
+                print(f"DEBUG LOGO CUSTOM ORDER aktiv – mapping: {mapping}")
+
+            for cat, y_center in title_y_centers.items():
+                pos = positions.get(cat, {})
+                box_h = float(pos.get("height", default_positions[cat]["height"]))
+                offset = float(vertical_offsets.get(cat, 0.0))
+                new_y_bottom = max(0.0, y_center - box_h / 2.0 + offset)
+                pos["y"] = new_y_bottom
+                positions[cat] = pos
+            print(f"DEBUG LOGO ALIGN aktiv – Titel-Zentren genutzt: {title_y_centers}")
+        else:
+            if align_with_titles:
+                print("DEBUG LOGO ALIGN keine Titel-Zentren gefunden – Fallback auf Admin/Default-Y")
+            if manual_mode:
+                print("DEBUG LOGO MANUAL MODE aktiv – verwende reine Admin-Positionen ohne Alignment")
 
         # Zeichnen
         for category, key in logo_keys.items():
@@ -909,6 +1017,7 @@ def _draw_page4_brand_logos(c: canvas.Canvas, dynamic_data: Dict[str, str], page
             c.saveState()
             try:
                 c.drawImage(img, x, y, width=dw, height=dh, preserveAspectRatio=True, mask='auto')
+                print(f"DEBUG LOGO DRAW {category}: x={x:.1f}, y={y:.1f}, w={dw:.1f}, h={dh:.1f}")
             except Exception as e:
                 print(f"Fehler beim Zeichnen Logo {category}: {e}")
             finally:
@@ -1101,5 +1210,5 @@ def generate_custom_offer_pdf(
         except Exception:
             total_pages = 7
 
-    
+
 
