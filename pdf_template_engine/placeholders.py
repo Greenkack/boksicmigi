@@ -380,6 +380,20 @@ PLACEHOLDER_MAPPING.update({
     
 })
 
+# Seite 5 – Nachhaltigkeit / CO2 Kennzahlen (Template Beispielwerte ersetzen)
+# ACHTUNG: Kurze numerische Tokens wie "244" können theoretisch woanders vorkommen;
+# falls Kollisionen auftreten, bitte spezifischere Platzhalter im YAML definieren.
+PLACEHOLDER_MAPPING.update({
+    "3.053,21 kg...": "sustainability_annual_co2_savings_kg_ellipsis",
+    "15.266,22 Kilometer": "sustainability_car_km_equivalent_long",
+    "15.266,22 km": "sustainability_car_km_equivalent_short",
+    "38,00 %": "sustainability_co2_reduction_percent",
+    "38,01 % .": "sustainability_co2_reduction_percent",
+    "244 Bäume": "sustainability_tree_equivalent_with_label",
+    "244": "sustainability_tree_equivalent_number",
+        "38,01 % .": "sustainability_co2_reduction_percent",  # zweite Variante (geändertes Template)
+})
+
 
 def fmt_number(value: Any, decimal_places: int = 2, suffix: str = "", force_german: bool = True) -> str:
     """Formatiert Zahlen im deutschen Format mit Punkt als Tausendertrennzeichen und Komma als Dezimaltrennzeichen."""
@@ -2800,5 +2814,73 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
             pass
     except Exception as _hp_err:
         print(f"Hinweis: Wärmepumpen-Platzhalter nicht erzeugt: {_hp_err}")
+
+    # =============================
+    # Seite 5: Nachhaltigkeits-KPIs
+    # =============================
+    try:
+        # 1) Jahres-CO2-Ersparnis (kg)
+        annual_co2_keys = [
+            'co2_savings_kg_per_year','co2_einsparung_jahr_kg','annual_co2_savings_kg',
+            'environmental_co2_savings_kg_year','co2_annual_savings_kg'
+        ]
+        annual_co2_kg = 0.0
+        for k in annual_co2_keys:
+            v = analysis_results.get(k)
+            if isinstance(v,(int,float)) and v>0:
+                annual_co2_kg = float(v)
+                break
+        if annual_co2_kg <= 0:  # Fallback aus Produktion * Emissionsfaktor
+            prod_kwh = None
+            for pk in ['annual_pv_production_kwh','annual_yield_kwh','sim_annual_yield_kwh']:
+                pv = analysis_results.get(pk)
+                if isinstance(pv,(int,float)) and pv>0:
+                    prod_kwh = float(pv)
+                    break
+            emission_factor = analysis_results.get('co2_emission_factor_kg_per_kwh')
+            if not isinstance(emission_factor,(int,float)) or emission_factor<=0:
+                emission_factor = 0.474  # Standard DE Strommix kg/kWh
+            if prod_kwh:
+                annual_co2_kg = prod_kwh * float(emission_factor)
+
+        # 2) Baumäquivalent
+        tree_factor = analysis_results.get('co2_per_tree_kg_pa')
+        if not isinstance(tree_factor,(int,float)) or tree_factor<=0:
+            tree_factor = 12.5  # konservativer Mittelwert
+        trees_equiv = annual_co2_kg / tree_factor if tree_factor>0 else 0.0
+
+        # 3) Auto-Kilometer Äquivalent
+        car_factor = analysis_results.get('co2_per_car_km_kg')
+        if not isinstance(car_factor,(int,float)) or car_factor<=0:
+            car_factor = 0.12  # ~120 g CO2 pro km
+        car_km_equiv = annual_co2_kg / car_factor if car_factor>0 else 0.0
+
+        # 4) Prozentuale Reduktion (Anteil am durchschnittlichen dt. Pro-Kopf Fußabdruck ~7,69 t)
+        baseline_tons = analysis_results.get('co2_baseline_per_capita_tons')
+        if not isinstance(baseline_tons,(int,float)) or baseline_tons<=0:
+            baseline_tons = 7.69
+        co2_reduction_pct = 0.0
+        if baseline_tons>0:
+            co2_reduction_pct = (annual_co2_kg/1000.0)/baseline_tons*100.0
+        # Bereits berechnete Werte ggf. bevorzugen
+        for rk in ['co2_reduction_percent','co2_footprint_reduction_percent']:
+            rv = analysis_results.get(rk)
+            if isinstance(rv,(int,float)) and rv>0:
+                co2_reduction_pct = float(rv)
+                break
+
+        # Formatierungen (deutsches Zahlenformat via fmt_number)
+        result['sustainability_annual_co2_savings_kg_ellipsis'] = f"{fmt_number(annual_co2_kg,2)} kg..."
+        result['sustainability_car_km_equivalent_long'] = f"{fmt_number(car_km_equiv,2)} Kilometer"
+        result['sustainability_car_km_equivalent_short'] = f"{fmt_number(car_km_equiv,2)} km"
+        result['sustainability_co2_reduction_percent'] = f"{fmt_number(co2_reduction_pct,2)} %"
+        # Bäume: gerundete ganze Zahl
+        result['sustainability_tree_equivalent_with_label'] = f"{fmt_number(round(trees_equiv),0)} Bäume"
+        result['sustainability_tree_equivalent_number'] = fmt_number(round(trees_equiv),0)
+
+        print("DEBUG SEITE5 SUSTAINABILITY:")
+        print(f"  annual_co2_kg={annual_co2_kg:.2f} | trees_equiv={trees_equiv:.2f} | car_km_equiv={car_km_equiv:.2f} | co2_reduction_pct={co2_reduction_pct:.2f}")
+    except Exception as e:
+        print(f"WARN Seite5 Nachhaltigkeit Block Fehler: {e}")
 
     return result
