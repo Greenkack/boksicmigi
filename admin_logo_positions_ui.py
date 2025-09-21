@@ -7,6 +7,12 @@ import streamlit as st
 import json
 from typing import Dict, Any
 import traceback
+import math
+
+try:
+    import pandas as pd
+except Exception:
+    pd = None  # Fallback – Tabelle optional
 
 # Default Logo-Positionen
 DEFAULT_POSITIONS = {
@@ -131,7 +137,7 @@ def render_logo_position_settings(load_admin_setting_func, save_admin_setting_fu
         st.markdown("---")
     
     # Speicher- und Reset-Buttons
-    col_save, col_reset, col_preview = st.columns(3)
+    col_save, col_reset, col_preview, col_visual = st.columns(4)
     
     with col_save:
         if st.button("💾 Positionen speichern", type="primary"):
@@ -160,13 +166,16 @@ def render_logo_position_settings(load_admin_setting_func, save_admin_setting_fu
     with col_preview:
         if st.button("👁️ Koordinaten-Übersicht"):
             st.session_state['show_logo_coords_preview'] = True
+
+    with col_visual:
+        if st.button("🖼️ Visuelle Vorschau"):
+            st.session_state['show_logo_visual_preview'] = True
     
     # Koordinaten-Übersicht
     if st.session_state.get('show_logo_coords_preview', False):
         st.subheader("📊 Koordinaten-Übersicht")
         
         # Tabelle mit allen Positionen
-        import pandas as pd
         
         table_data = []
         for category, pos in edited_positions.items():
@@ -190,6 +199,114 @@ def render_logo_position_settings(load_admin_setting_func, save_admin_setting_fu
         if st.button("❌ Übersicht schließen"):
             st.session_state['show_logo_coords_preview'] = False
             st.rerun()
+
+    # Visuelle Vorschau (vereinfachter A4-Canvas)
+    if st.session_state.get('show_logo_visual_preview', False):
+        st.subheader("🖼️ Visuelle Live-Vorschau (A4 S.4)")
+        st.caption("Hinweis: Maßstab vereinfacht – zeigt Bounding-Boxen und resultierende Positionen. Orientierung: (0,0) unten links.")
+
+        # Einstellungen für Alignment
+        try:
+            align_with_titles_setting = load_admin_setting_func("pdf_logo_align_with_titles", True)
+            manual_mode = load_admin_setting_func("pdf_logo_manual_mode", False)
+            keep_alignment = load_admin_setting_func("pdf_logo_keep_alignment_when_customized", False)
+        except Exception:
+            align_with_titles_setting = True
+            manual_mode = False
+            keep_alignment = False
+
+        # Simulationsparameter
+        a4_w, a4_h = 595.0, 842.0
+        scale = 0.5  # Darstellung verkleinern
+        canvas_w, canvas_h = int(a4_w * scale), int(a4_h * scale)
+
+        # Headline Y-Zentren (hart kodiert approximation – kann optional aus YAML geladen werden)
+        # Diese Werte müssten sonst analog im Backend gelesen werden.
+        headline_centers = {
+            'modul': 586.6,
+            'wechselrichter': 394.9,
+            'batteriespeicher': 203.9
+        }
+
+        # Prüfen ob Admin deutlich von Defaults abweicht
+        admin_customized = False
+        for cat, dfl in DEFAULT_POSITIONS.items():
+            p = edited_positions.get(cat, dfl)
+            if abs(p['x']-dfl['x'])>0.01 or abs(p['y']-dfl['y'])>0.01:
+                admin_customized = True
+                break
+
+        effective_positions = {}
+        align_effective = align_with_titles_setting and not manual_mode
+        if admin_customized and align_effective and not keep_alignment:
+            # würde im Code abgeschaltet
+            align_effective = False
+
+        if align_effective:
+            # Repliziere vereinfachte Neu-Berechnung: Y durch headline center - box_h/2
+            for cat, pos in edited_positions.items():
+                h_center = headline_centers.get(cat)
+                if h_center:
+                    new_pos = pos.copy()
+                    new_pos['y'] = max(0.0, h_center - pos['height']/2.0)
+                    effective_positions[cat] = new_pos
+                else:
+                    effective_positions[cat] = pos
+        else:
+            effective_positions = edited_positions
+
+        # Zeichenfläche (SVG)
+        import xml.etree.ElementTree as ET
+        svg = ET.Element('svg', attrib={'width': str(canvas_w), 'height': str(canvas_h), 'viewBox': f'0 0 {a4_w} {a4_h}', 'style': 'border:1px solid #ccc; background:#fafafa'})
+
+        # Hilfslinien für Headline-Zentren
+        for cat, yc in headline_centers.items():
+            line = ET.SubElement(svg, 'line', attrib={'x1':'0','x2':str(a4_w),'y1':str(a4_h-yc),'y2':str(a4_h-yc),'stroke':'#ddd','stroke-width':'1','stroke-dasharray':'4 4'})
+            ET.SubElement(svg, 'text', attrib={'x':'5','y':str(a4_h-yc-4),'font-size':'10','fill':'#888'}).text = f"{cat} center"
+
+        # Boxen zeichnen
+        colors_map = {
+            'modul': '#1976d2',
+            'wechselrichter': '#388e3c',
+            'batteriespeicher': '#f57c00'
+        }
+        for cat, pos in edited_positions.items():
+            eff = effective_positions.get(cat, pos)
+            # Original (falls abweichend) gepunktete Box
+            if eff is not pos:
+                ET.SubElement(svg, 'rect', attrib={
+                    'x': str(pos['x']), 'y': str(a4_h - pos['y'] - pos['height']),
+                    'width': str(pos['width']), 'height': str(pos['height']),
+                    'fill': 'none', 'stroke': colors_map.get(cat,'#555'), 'stroke-width':'1', 'stroke-dasharray':'3 2'
+                })
+            # Effektive Box
+            ET.SubElement(svg, 'rect', attrib={
+                'x': str(eff['x']), 'y': str(a4_h - eff['y'] - eff['height']),
+                'width': str(eff['width']), 'height': str(eff['height']),
+                'fill': colors_map.get(cat,'#555')+'20', 'stroke': colors_map.get(cat,'#555'), 'stroke-width':'1'
+            })
+            ET.SubElement(svg, 'text', attrib={
+                'x': str(eff['x']+2), 'y': str(a4_h - eff['y'] - 4), 'font-size':'10', 'fill': colors_map.get(cat,'#333')
+            }).text = cat
+
+        svg_code = ET.tostring(svg, encoding='unicode')
+        st.components.v1.html(svg_code, height=canvas_h+10, scrolling=True)
+
+        # Legende
+        st.markdown("**Legende:** Vollfarbige Box = effektive Position, Gepunktet = ursprünglich eingegebene Admin-Box (wenn durch Alignment angepasst).")
+
+        col_close, col_toggle = st.columns(2)
+        with col_close:
+            if st.button("❌ Vorschau schließen"):
+                st.session_state['show_logo_visual_preview'] = False
+                st.rerun()
+        with col_toggle:
+            if st.button("🔁 Alignment umschalten (nur Vorschau)"):
+                # Toggle Simulation
+                st.session_state['show_logo_visual_preview'] = True
+                # Temporär Setting toggeln (Simulation unabhängig vom gespeicherten Wert)
+                align_with_titles_setting = not align_with_titles_setting
+                st.experimental_rerun()
 
 def render_logo_position_test():
     """Test-Funktion für Logo-Positionen"""
