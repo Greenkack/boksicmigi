@@ -28,6 +28,13 @@ except Exception:
     pa_upsert_attribute = None  # type: ignore
     pa_delete_attribute = None  # type: ignore
 
+# Import new matrix classes
+try:
+    from matrix_loader import MatrixLoader
+    MATRIX_LOADER_AVAILABLE = True
+except ImportError:
+    MATRIX_LOADER_AVAILABLE = False
+
 # Neue Datenbank-Management Module
 try:
     from admin_product_database_ui import render_product_admin_ui
@@ -142,14 +149,11 @@ def _dummy_set_default_company(company_id: int) -> bool: return False
 def _dummy_add_company_document(company_id: int, display_name: str, document_type: str, original_filename: str, file_content_bytes: bytes) -> Optional[int]: return None
 def _dummy_list_company_documents(company_id: int, doc_type: Optional[str]=None) -> List[Dict[str, Any]]: return []
 def _dummy_delete_company_document(document_id: int) -> bool: return False
-def _dummy_parse_price_matrix_csv(csv_data: Union[str, io.StringIO], errors_list: List[str]) -> Optional[pd.DataFrame]:
-    if errors_list is not None: errors_list.append("Dummy-Parser für Preis-Matrix CSV aktiv.")
-    return None
+# Old dummy CSV parsing function removed - now using MatrixLoader class
 
 _load_admin_setting_safe: Callable = _dummy_load_admin_setting
 _save_admin_setting_safe: Callable = _dummy_save_admin_setting
-_parse_price_matrix_csv_safe: Callable = _dummy_parse_price_matrix_csv
-_parse_price_matrix_excel_func: Optional[Callable[[Optional[bytes], List[str]], Optional[pd.DataFrame]]] = None
+# Old matrix parsing function references removed - now using MatrixLoader class
 _list_products_safe: Callable = _dummy_list_products
 _add_product_safe: Callable = _dummy_add_product
 _update_product_safe: Callable = _dummy_update_product
@@ -181,48 +185,7 @@ def get_text_local(key: str, fallback_text: str) -> str:
         admin_texts_dict = {}
     return admin_texts_dict.get(key, fallback_text)
 
-def parse_module_price_matrix_excel( 
-    excel_bytes: Optional[bytes], 
-    errors_list: List[str]
-) -> Optional[pd.DataFrame]:
-    if not excel_bytes:
-        errors_list.append("Preis-Matrix (Excel): Übergebene Excel-Daten sind leer.")
-        return None
-    try:
-        excel_file_like = io.BytesIO(excel_bytes)
-        df = pd.read_excel(excel_file_like, index_col=0, header=0)
-        if df.empty:
-            if df.index.name is None or str(df.index.name).strip().lower() not in ['anzahl module', 'anzahl_module']:
-                 errors_list.append("Preis-Matrix (Excel): Excel-Datei ist leer oder die erste Spalte (erwartet: 'Anzahl Module') fehlt oder ist leer.")
-            else: 
-                 errors_list.append("Preis-Matrix (Excel): Excel-Datei enthält keine Datenzeilen unterhalb des Headers und des Index.")
-            return None
-        df.index.name = 'Anzahl Module'
-        df.index = pd.to_numeric(df.index, errors='coerce')
-        df = df[df.index.notna()] 
-        if df.empty:
-            errors_list.append("Preis-Matrix (Excel): Index ('Anzahl Module') enthält keine gültigen Zahlen nach der Konvertierung oder alle Zeilen hatten ungültige Indexwerte.")
-            return None
-        df.index = df.index.astype(int)
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                df[col] = df[col].astype(str).str.replace(r'[^\d,.-]', '', regex=True) 
-                df[col] = df[col].str.replace('.', '', regex=False) 
-                df[col] = df[col].str.replace(',', '.', regex=False) 
-            df[col] = pd.to_numeric(df[col], errors='coerce') 
-        df.dropna(axis=0, how='all', inplace=True)
-        df.dropna(axis=1, how='all', inplace=True)
-        if df.empty:
-            errors_list.append("Preis-Matrix (Excel): Nach der Verarbeitung (Bereinigung, Typkonvertierung, Entfernung leerer Zeilen/Spalten) ist die Matrix leer.")
-            return None
-        return df
-    except ValueError as ve: 
-        errors_list.append(f"Preis-Matrix (Excel): Wert-Fehler beim Parsen der Excel-Datei: {ve}. Bitte Zahlenformate prüfen.")
-        return None
-    except Exception as e: 
-        errors_list.append(f"Preis-Matrix (Excel): Ein unbekannter Fehler ist beim Parsen der Excel-Datei aufgetreten: {e}")
-        traceback.print_exc()
-        return None
+# Old parse_module_price_matrix_excel function removed - now using MatrixLoader class
 
 def render_company_crud_tab(
     db_list_companies_func: Callable[[], List[Dict[str, Any]]],
@@ -1374,93 +1337,211 @@ def render_general_settings_extended(load_admin_setting_func: Callable, save_adm
                 st.error("Fehler beim Speichern der Cheat-Einstellung.")
 
 def render_price_matrix(load_admin_setting_func: Callable, save_admin_setting_func: Callable, parse_csv_func_from_calculations: Callable, parse_excel_func_local_admin: Callable):
-    if 'uploaded_excel_bytes_for_save_admin' not in st.session_state: st.session_state.uploaded_excel_bytes_for_save_admin = None
-    if 'parsed_excel_df_for_preview_admin' not in st.session_state: st.session_state.parsed_excel_df_for_preview_admin = None
-    if 'uploaded_csv_content_for_save_admin' not in st.session_state: st.session_state.uploaded_csv_content_for_save_admin = None
-    if 'parsed_csv_df_for_preview_admin' not in st.session_state: st.session_state.parsed_csv_df_for_preview_admin = None
+    """
+    Render price matrix management UI.
+    Now uses the new MatrixLoader class instead of old parsing functions.
+    """
+    # Initialize session state
+    if 'uploaded_excel_bytes_for_save_admin' not in st.session_state: 
+        st.session_state.uploaded_excel_bytes_for_save_admin = None
+    if 'parsed_excel_df_for_preview_admin' not in st.session_state: 
+        st.session_state.parsed_excel_df_for_preview_admin = None
+    if 'uploaded_csv_content_for_save_admin' not in st.session_state: 
+        st.session_state.uploaded_csv_content_for_save_admin = None
+    if 'parsed_csv_df_for_preview_admin' not in st.session_state: 
+        st.session_state.parsed_csv_df_for_preview_admin = None
+
+    # Initialize MatrixLoader
+    if MATRIX_LOADER_AVAILABLE:
+        matrix_loader = MatrixLoader()
+    else:
+        st.error("MatrixLoader nicht verfügbar. Bitte neue Preismatrix-Klassen installieren.")
+        return
+
     st.subheader(get_text_local("admin_price_matrix_header", "Preis-Matrix Verwaltung"))
+    
+    # Excel Upload Section
     st.info(get_text_local("admin_price_matrix_info_detailed_xlsx", "Laden Sie hier die Grundpreis-Matrix als Excel-Datei (.xlsx) hoch..."))
     uploader_key_excel = f"price_matrix_upload_widget_xlsx{WIDGET_KEY_SUFFIX}"
     uploaded_file_excel = st.file_uploader(get_text_local("admin_upload_xlsx_label", "Excel-Datei (.xlsx) hochladen"), type=["xlsx"], key=uploader_key_excel)
+    
     if uploaded_file_excel is not None:
         try:
-            excel_bytes_content = uploaded_file_excel.getvalue(); parser_errors_matrix_upload_excel: List[str] = []
-            parsed_df_temp_excel = parse_excel_func_local_admin(excel_bytes_content, parser_errors_matrix_upload_excel)
-            if parser_errors_matrix_upload_excel:
-                for err_matrix in parser_errors_matrix_upload_excel: st.warning(f"Parser-Warnung (Excel): {err_matrix}")
-            if parsed_df_temp_excel is not None and not parsed_df_temp_excel.empty:
-                st.session_state.uploaded_excel_bytes_for_save_admin = excel_bytes_content; st.session_state.parsed_excel_df_for_preview_admin = parsed_df_temp_excel
-                st.success(get_text_local("admin_xlsx_parse_success", "Excel geparst."))
+            excel_bytes_content = uploaded_file_excel.getvalue()
+            
+            # Use MatrixLoader to parse Excel
+            price_matrix = matrix_loader.load_matrix(excel_bytes=excel_bytes_content)
+            
+            if price_matrix and price_matrix.df is not None and not price_matrix.df.empty:
+                st.session_state.uploaded_excel_bytes_for_save_admin = excel_bytes_content
+                st.session_state.parsed_excel_df_for_preview_admin = price_matrix.df
+                st.success(get_text_local("admin_xlsx_parse_success", "Excel erfolgreich geparst."))
+                
+                # Show validation errors if any
+                if price_matrix.validation_errors:
+                    for error in price_matrix.validation_errors:
+                        st.warning(f"Validierung: {error}")
             else:
-                st.error(get_text_local("admin_xlsx_parse_error_empty", "Excel geparst, aber leer.")); st.session_state.uploaded_excel_bytes_for_save_admin = None; st.session_state.parsed_excel_df_for_preview_admin = None
-        except Exception as e_upload_process_excel: st.error(f"Fehler Verarbeitung Excel: {e_upload_process_excel}"); traceback.print_exc(); st.session_state.uploaded_excel_bytes_for_save_admin = None; st.session_state.parsed_excel_df_for_preview_admin = None
+                st.error(get_text_local("admin_xlsx_parse_error_empty", "Excel konnte nicht geparst werden oder ist leer."))
+                st.session_state.uploaded_excel_bytes_for_save_admin = None
+                st.session_state.parsed_excel_df_for_preview_admin = None
+                
+        except Exception as e_upload_process_excel:
+            st.error(f"Fehler bei Excel-Verarbeitung: {e_upload_process_excel}")
+            traceback.print_exc()
+            st.session_state.uploaded_excel_bytes_for_save_admin = None
+            st.session_state.parsed_excel_df_for_preview_admin = None
+
+    # Excel Preview and Save
     if st.session_state.get('parsed_excel_df_for_preview_admin') is not None:
-        st.markdown("---"); st.markdown("**Vorschau Excel Preis-Matrix (nicht gespeichert):**"); st.dataframe(st.session_state.parsed_excel_df_for_preview_admin, use_container_width=True)
-        if st.button(get_text_local("admin_save_price_matrix_button_xlsx", "...Excel...speichern"), key=f"save_uploaded_price_matrix_xlsx_btn{WIDGET_KEY_SUFFIX}"):
+        st.markdown("---")
+        st.markdown("**Vorschau Excel Preis-Matrix (nicht gespeichert):**")
+        st.dataframe(st.session_state.parsed_excel_df_for_preview_admin, use_container_width=True)
+        
+        if st.button(get_text_local("admin_save_price_matrix_button_xlsx", "Excel Preis-Matrix speichern"), key=f"save_uploaded_price_matrix_xlsx_btn{WIDGET_KEY_SUFFIX}"):
             if st.session_state.uploaded_excel_bytes_for_save_admin:
                 if save_admin_setting_func('price_matrix_excel_bytes', st.session_state.uploaded_excel_bytes_for_save_admin):
-                    st.success("Preis-Matrix (Excel) gespeichert!"); st.session_state.uploaded_excel_bytes_for_save_admin = None; st.session_state.parsed_excel_df_for_preview_admin = None
-                    st.session_state.selected_page_key_sui = "admin"; st.rerun()
-                else: st.error("Fehler beim Speichern der Excel Preis-Matrix.")
-            else: st.warning("Kein Excel-Inhalt zum Speichern.")
+                    st.success("Preis-Matrix (Excel) gespeichert!")
+                    st.session_state.uploaded_excel_bytes_for_save_admin = None
+                    st.session_state.parsed_excel_df_for_preview_admin = None
+                    st.session_state.selected_page_key_sui = "admin"
+                    st.rerun()
+                else:
+                    st.error("Fehler beim Speichern der Excel Preis-Matrix.")
+            else:
+                st.warning("Kein Excel-Inhalt zum Speichern.")
         st.markdown("---")
+
+    # Current Excel Matrix Display
     st.subheader(get_text_local("admin_current_saved_price_matrix_header_xlsx", "Gespeicherte Preis-Matrix (Excel):"))
     current_price_matrix_excel_bytes_from_db = load_admin_setting_func('price_matrix_excel_bytes', None)
+    
     if current_price_matrix_excel_bytes_from_db and isinstance(current_price_matrix_excel_bytes_from_db, bytes):
-        display_errors_stored_matrix_pm_excel: List[str] = []; parsed_stored_df_pm_excel = parse_excel_func_local_admin(current_price_matrix_excel_bytes_from_db, display_errors_stored_matrix_pm_excel)
-        if display_errors_stored_matrix_pm_excel:
-            for err_pm_stored_excel in display_errors_stored_matrix_pm_excel: st.warning(f"Hinweis Laden Excel-Matrix: {err_pm_stored_excel}")
-        if parsed_stored_df_pm_excel is not None and not parsed_stored_df_pm_excel.empty:
-            st.dataframe(parsed_stored_df_pm_excel, use_container_width=True)
-            if st.button(get_text_local("admin_delete_saved_price_matrix_button_xlsx", "Excel Preis-Matrix löschen"), key=f"delete_price_matrix_excel_final{WIDGET_KEY_SUFFIX}"):
-                if save_admin_setting_func('price_matrix_excel_bytes', None): st.success("Excel Preis-Matrix gelöscht."); st.session_state.selected_page_key_sui = "admin"; st.rerun()
-                else: st.error("Fehler Löschen Excel Preis-Matrix.")
-        else: st.warning("Gespeicherte Excel Preis-Matrix ungültig.")
-    else: st.info("Keine Excel Preis-Matrix gespeichert.")
+        try:
+            # Use MatrixLoader to display current matrix
+            current_matrix = matrix_loader.load_matrix(excel_bytes=current_price_matrix_excel_bytes_from_db)
+            
+            if current_matrix and current_matrix.df is not None and not current_matrix.df.empty:
+                st.dataframe(current_matrix.df, use_container_width=True)
+                
+                if current_matrix.validation_errors:
+                    for error in current_matrix.validation_errors:
+                        st.warning(f"Hinweis: {error}")
+                        
+                if st.button(get_text_local("admin_delete_saved_price_matrix_button_xlsx", "Excel Preis-Matrix löschen"), key=f"delete_price_matrix_excel_final{WIDGET_KEY_SUFFIX}"):
+                    if save_admin_setting_func('price_matrix_excel_bytes', None):
+                        st.success("Excel Preis-Matrix gelöscht.")
+                        st.session_state.selected_page_key_sui = "admin"
+                        st.rerun()
+                    else:
+                        st.error("Fehler beim Löschen der Excel Preis-Matrix.")
+            else:
+                st.warning("Gespeicherte Excel Preis-Matrix ungültig.")
+        except Exception as e:
+            st.error(f"Fehler beim Laden der gespeicherten Excel-Matrix: {e}")
+    else:
+        st.info("Keine Excel Preis-Matrix gespeichert.")
+
     st.markdown("---")
+
+    # CSV Upload Section
     st.info(get_text_local("admin_price_matrix_info_detailed_csv", "Laden Sie hier die Grundpreis-Matrix als CSV-Datei hoch..."))
     uploader_key_csv = f"price_matrix_upload_widget_csv{WIDGET_KEY_SUFFIX}"
     uploaded_file_csv = st.file_uploader(get_text_local("admin_upload_csv_label", "CSV-Datei hochladen"), type=["csv"], key=uploader_key_csv)
+    
     if uploaded_file_csv is not None:
         try:
-            csv_bytes = uploaded_file_csv.getvalue(); csv_content_temp = None
-            try: csv_content_temp = csv_bytes.decode("utf-8")
+            csv_bytes = uploaded_file_csv.getvalue()
+            csv_content_temp = None
+            
+            # Try different encodings
+            try:
+                csv_content_temp = csv_bytes.decode("utf-8")
             except UnicodeDecodeError:
-                try: csv_content_temp = csv_bytes.decode("iso-8859-1"); st.info("CSV mit ISO-8859-1 gelesen.")
-                except UnicodeDecodeError as e_decode: st.error(f"CSV Dekodierfehler: {e_decode}")
-            if csv_content_temp is not None: 
-                parser_errors_matrix_upload_csv: List[str] = []; parsed_df_temp_csv = parse_csv_func_from_calculations(io.StringIO(csv_content_temp), parser_errors_matrix_upload_csv) 
-                if parser_errors_matrix_upload_csv:
-                    for err_matrix_csv in parser_errors_matrix_upload_csv: st.warning(f"Parser-Warnung (CSV): {err_matrix_csv}")
-                if parsed_df_temp_csv is not None and not parsed_df_temp_csv.empty:
-                    st.session_state.uploaded_csv_content_for_save_admin = csv_content_temp; st.session_state.parsed_csv_df_for_preview_admin = parsed_df_temp_csv
-                    st.success(get_text_local("admin_csv_parse_success", "CSV geparst."))
-                else: st.error(get_text_local("admin_csv_parse_error_empty", "CSV geparst, aber leer.")); st.session_state.uploaded_csv_content_for_save_admin = None; st.session_state.parsed_csv_df_for_preview_admin = None
-        except Exception as e_upload_process_csv: st.error(f"Fehler Verarbeitung CSV: {e_upload_process_csv}"); traceback.print_exc(); st.session_state.uploaded_csv_content_for_save_admin = None; st.session_state.parsed_csv_df_for_preview_admin = None
+                try:
+                    csv_content_temp = csv_bytes.decode("iso-8859-1")
+                    st.info("CSV mit ISO-8859-1 gelesen.")
+                except UnicodeDecodeError as e_decode:
+                    st.error(f"CSV Dekodierfehler: {e_decode}")
+            
+            if csv_content_temp is not None:
+                # Use MatrixLoader to parse CSV
+                price_matrix = matrix_loader.load_matrix(csv_data=csv_content_temp)
+                
+                if price_matrix and price_matrix.df is not None and not price_matrix.df.empty:
+                    st.session_state.uploaded_csv_content_for_save_admin = csv_content_temp
+                    st.session_state.parsed_csv_df_for_preview_admin = price_matrix.df
+                    st.success(get_text_local("admin_csv_parse_success", "CSV erfolgreich geparst."))
+                    
+                    # Show validation errors if any
+                    if price_matrix.validation_errors:
+                        for error in price_matrix.validation_errors:
+                            st.warning(f"Validierung: {error}")
+                else:
+                    st.error(get_text_local("admin_csv_parse_error_empty", "CSV konnte nicht geparst werden oder ist leer."))
+                    st.session_state.uploaded_csv_content_for_save_admin = None
+                    st.session_state.parsed_csv_df_for_preview_admin = None
+                    
+        except Exception as e_upload_process_csv:
+            st.error(f"Fehler bei CSV-Verarbeitung: {e_upload_process_csv}")
+            traceback.print_exc()
+            st.session_state.uploaded_csv_content_for_save_admin = None
+            st.session_state.parsed_csv_df_for_preview_admin = None
+
+    # CSV Preview and Save
     if st.session_state.get('parsed_csv_df_for_preview_admin') is not None:
-        st.markdown("---"); st.markdown("**Vorschau CSV Preis-Matrix (nicht gespeichert):**"); st.dataframe(st.session_state.parsed_csv_df_for_preview_admin, use_container_width=True)
-        if st.button(get_text_local("admin_save_price_matrix_button_csv", "...CSV...speichern"), key=f"save_uploaded_price_matrix_csv_btn{WIDGET_KEY_SUFFIX}"):
+        st.markdown("---")
+        st.markdown("**Vorschau CSV Preis-Matrix (nicht gespeichert):**")
+        st.dataframe(st.session_state.parsed_csv_df_for_preview_admin, use_container_width=True)
+        
+        if st.button(get_text_local("admin_save_price_matrix_button_csv", "CSV Preis-Matrix speichern"), key=f"save_uploaded_price_matrix_csv_btn{WIDGET_KEY_SUFFIX}"):
             if st.session_state.uploaded_csv_content_for_save_admin:
                 if save_admin_setting_func('price_matrix_csv_data', st.session_state.uploaded_csv_content_for_save_admin):
-                    st.success("Preis-Matrix (CSV) gespeichert!"); st.session_state.uploaded_csv_content_for_save_admin = None; st.session_state.parsed_csv_df_for_preview_admin = None
-                    st.session_state.selected_page_key_sui = "admin"; st.rerun()
-                else: st.error("Fehler beim Speichern der CSV Preis-Matrix.")
-            else: st.warning("Kein CSV-Inhalt zum Speichern.")
+                    st.success("Preis-Matrix (CSV) gespeichert!")
+                    st.session_state.uploaded_csv_content_for_save_admin = None
+                    st.session_state.parsed_csv_df_for_preview_admin = None
+                    st.session_state.selected_page_key_sui = "admin"
+                    st.rerun()
+                else:
+                    st.error("Fehler beim Speichern der CSV Preis-Matrix.")
+            else:
+                st.warning("Kein CSV-Inhalt zum Speichern.")
         st.markdown("---")
-    st.subheader(get_text_local("admin_current_saved_price_matrix_header_csv", "Gespeicherte Preis-Matrix (CSV):"))
+
+    # Current CSV Matrix Display
     current_price_matrix_csv_from_db = load_admin_setting_func('price_matrix_csv_data', "") 
+    
     if current_price_matrix_csv_from_db and isinstance(current_price_matrix_csv_from_db, str) and current_price_matrix_csv_from_db.strip():
-        display_errors_stored_matrix_pm_csv: List[str] = []; parsed_stored_df_pm_csv = parse_csv_func_from_calculations(io.StringIO(current_price_matrix_csv_from_db), display_errors_stored_matrix_pm_csv)
-        if display_errors_stored_matrix_pm_csv:
-            for err_pm_stored_csv in display_errors_stored_matrix_pm_csv: st.warning(f"Hinweis Laden CSV-Matrix: {err_pm_stored_csv}")
-        if parsed_stored_df_pm_csv is not None and not parsed_stored_df_pm_csv.empty:
-            st.dataframe(parsed_stored_df_pm_csv, use_container_width=True)
-            if st.button(get_text_local("admin_delete_saved_price_matrix_button_csv", "...CSV...löschen"), key=f"delete_price_matrix_csv_final{WIDGET_KEY_SUFFIX}"):
-                if save_admin_setting_func('price_matrix_csv_data', None): st.success("CSV Preis-Matrix gelöscht."); st.session_state.selected_page_key_sui = "admin"; st.rerun()
-                else: st.error("Fehler Löschen CSV Preis-Matrix.")
-        else:
-            st.warning("Gespeicherte CSV Preis-Matrix ungültig."); st.text_area("Rohdaten CSV (max. 500 Z.)", value=current_price_matrix_csv_from_db[:500]+"..." if len(current_price_matrix_csv_from_db) > 500 else current_price_matrix_csv_from_db, height=100, disabled=True, key=f"raw_db_csv_preview{WIDGET_KEY_SUFFIX}")
-    else: st.info("Keine CSV Preis-Matrix gespeichert.")
+        try:
+            # Use MatrixLoader to display current CSV matrix
+            current_csv_matrix = matrix_loader.load_matrix(csv_data=current_price_matrix_csv_from_db)
+            
+            if current_csv_matrix and current_csv_matrix.df is not None and not current_csv_matrix.df.empty:
+                st.dataframe(current_csv_matrix.df, use_container_width=True)
+                
+                if current_csv_matrix.validation_errors:
+                    for error in current_csv_matrix.validation_errors:
+                        st.warning(f"Hinweis: {error}")
+                        
+                if st.button(get_text_local("admin_delete_saved_price_matrix_button_csv", "CSV Preis-Matrix löschen"), key=f"delete_price_matrix_csv_final{WIDGET_KEY_SUFFIX}"):
+                    if save_admin_setting_func('price_matrix_csv_data', None):
+                        st.success("CSV Preis-Matrix gelöscht.")
+                        st.session_state.selected_page_key_sui = "admin"
+                        st.rerun()
+                    else:
+                        st.error("Fehler beim Löschen der CSV Preis-Matrix.")
+            else:
+                st.warning("Gespeicherte CSV Preis-Matrix ungültig.")
+                st.text_area("Rohdaten CSV (max. 500 Z.)", 
+                           value=current_price_matrix_csv_from_db[:500]+"..." if len(current_price_matrix_csv_from_db) > 500 else current_price_matrix_csv_from_db, 
+                           height=100, disabled=True, key=f"raw_db_csv_preview{WIDGET_KEY_SUFFIX}")
+        except Exception as e:
+            st.error(f"Fehler beim Laden der gespeicherten CSV-Matrix: {e}")
+            st.text_area("Rohdaten CSV (max. 500 Z.)", 
+                       value=current_price_matrix_csv_from_db[:500]+"..." if len(current_price_matrix_csv_from_db) > 500 else current_price_matrix_csv_from_db, 
+                       height=100, disabled=True, key=f"raw_db_csv_preview{WIDGET_KEY_SUFFIX}")
+    else:
+        st.info("Keine CSV Preis-Matrix gespeichert.")
 
 def render_tariff_management(load_admin_setting_func: Callable, save_admin_setting_func: Callable):
     st.subheader(get_text_local("admin_tariff_management_header", "Einspeisevergütungen"))
@@ -1812,30 +1893,23 @@ def render_admin_panel(
     db_delete_company_document_func: Callable[[int], bool],
     **kwargs: Any 
 ):
-    global _load_admin_setting_safe, _save_admin_setting_safe, _parse_price_matrix_csv_safe
+    global _load_admin_setting_safe, _save_admin_setting_safe
     global _list_products_safe, _add_product_safe, _update_product_safe, _delete_product_safe
     global _get_product_by_id_safe, _get_product_by_model_name_safe, _list_product_categories_safe
     global _list_companies_safe, _add_company_safe, _get_company_by_id_safe, _update_company_safe
     global _delete_company_safe, _set_default_company_safe, _add_company_document_safe
     global _list_company_documents_safe, _delete_company_document_safe
-    global _parse_price_matrix_excel_func
+    # Old matrix parsing function globals removed - now using MatrixLoader class
 
     _load_admin_setting_safe = load_admin_setting_func; _save_admin_setting_safe = save_admin_setting_func
-    _parse_price_matrix_csv_safe = parse_price_matrix_csv_func 
+    # Old matrix parsing function assignment removed - now using MatrixLoader class 
     _list_products_safe = list_products_func; _add_product_safe = add_product_func; _update_product_safe = update_product_func; _delete_product_safe = delete_product_func
     _get_product_by_id_safe = get_product_by_id_func; _get_product_by_model_name_safe = get_product_by_model_name_func; _list_product_categories_safe = list_product_categories_func
     _list_companies_safe = db_list_companies_func; _add_company_safe = db_add_company_func; _get_company_by_id_safe = db_get_company_by_id_func; _update_company_safe = db_update_company_func
     _delete_company_safe = db_delete_company_func; _set_default_company_safe = db_set_default_company_func; _add_company_document_safe = db_add_company_document_func
     _list_company_documents_safe = db_list_company_documents_func; _delete_company_document_safe = db_delete_company_document_func
     
-    passed_excel_parser = kwargs.get('parse_price_matrix_excel_func')
-    if passed_excel_parser and callable(passed_excel_parser): _parse_price_matrix_excel_func = passed_excel_parser
-    elif callable(parse_module_price_matrix_excel): _parse_price_matrix_excel_func = parse_module_price_matrix_excel
-    else:
-        def _dummy_parse_excel_admin_final(excel_bytes, errors_list_local): 
-            if errors_list_local is not None: errors_list_local.append("Admin: Dummy Excel-Parser (final) aktiv.")
-            return None
-        _parse_price_matrix_excel_func = _dummy_parse_excel_admin_final
+    # Old matrix parsing function assignments removed - now using MatrixLoader class
 
     actual_texts_dict_for_session: Dict[str, str]
     if isinstance(texts, dict):
@@ -1877,7 +1951,7 @@ def render_admin_panel(
         "admin_tab_logo_management": lambda: render_logo_management_tab(),
         "admin_tab_product_database_crud": lambda: render_product_admin_ui(),
         "admin_tab_general_settings": lambda: render_general_settings_extended(load_admin_setting_func, save_admin_setting_func),
-        "admin_tab_price_matrix": lambda: render_price_matrix(load_admin_setting_func, save_admin_setting_func, _parse_price_matrix_csv_safe, _parse_price_matrix_excel_func),
+        "admin_tab_price_matrix": lambda: render_price_matrix(load_admin_setting_func, save_admin_setting_func, None, None),
         "admin_tab_tariff_management": lambda: render_tariff_management(load_admin_setting_func, save_admin_setting_func),
         "admin_tab_pdf_design": lambda: render_pdf_design_settings(load_admin_setting_func, save_admin_setting_func),
         "admin_tab_payment_terms": lambda: render_comprehensive_admin_payment_terms_ui_with_variants(load_admin_setting_func, save_admin_setting_func, WIDGET_KEY_SUFFIX),

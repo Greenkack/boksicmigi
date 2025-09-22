@@ -100,8 +100,7 @@ crm_dashboard_ui_module: Optional[Any] = None
 crm_pipeline_ui_module: Optional[Any] = None
 crm_calendar_ui_module: Optional[Any] = None
 
-_parse_price_matrix_csv_from_calculations: Optional[Callable[[Union[str, io.StringIO], List[str]], Optional[pd.DataFrame]]] = None
-_parse_price_matrix_excel_from_calculations: Optional[Callable[[Optional[bytes], List[str]], Optional[pd.DataFrame]]] = None
+# Old matrix parsing function references removed - now using MatrixLoader class
 
 def import_module_with_fallback(module_name: str, import_errors_list: List[str]):
     try:
@@ -362,8 +361,8 @@ def main():
                 "get_db_connection_func": getattr(database_module, 'get_db_connection', None),
                 "save_admin_setting_func": getattr(database_module, 'save_admin_setting', None),
                 "load_admin_setting_func": getattr(database_module, 'load_admin_setting', None),
-                "parse_price_matrix_csv_func": _parse_price_matrix_csv_from_calculations, 
-                "parse_price_matrix_excel_func": _parse_price_matrix_excel_from_calculations, 
+                "parse_price_matrix_csv_func": None,  # Deprecated - using MatrixLoader now
+                "parse_price_matrix_excel_func": None,  # Deprecated - using MatrixLoader now 
                 "list_products_func": getattr(product_db_module, 'list_products', None),
                 "add_product_func": getattr(product_db_module, 'add_product', None),
                 "update_product_func": getattr(product_db_module, 'update_product', None),
@@ -746,11 +745,7 @@ if __name__ == "__main__":
         heatpump_ui_module = import_module_with_fallback("heatpump_ui", import_errors)
         solar_calculator_module = import_module_with_fallback("solar_calculator", import_errors)
         
-        if calculations_module:
-            if hasattr(calculations_module, 'parse_module_price_matrix_csv'):
-                _parse_price_matrix_csv_from_calculations = calculations_module.parse_module_price_matrix_csv
-            if hasattr(calculations_module, 'parse_module_price_matrix_excel'): 
-                _parse_price_matrix_excel_from_calculations = calculations_module.parse_module_price_matrix_excel
+        # Old matrix parsing function assignments removed - now using MatrixLoader class
 
         if 'db_initialized' not in st.session_state:
             if database_module: 

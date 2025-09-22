@@ -10,24 +10,33 @@ from typing import Dict, Any, Optional
 import math
 
 def _get_pricing_modifications_from_session() -> Dict[str, Any]:
-    """Holt Preismodifikationen aus der Session"""
-    return st.session_state.get('pricing_modifications', {
-        'discount_percent': 0.0,
-        'surcharge_percent': 0.0,
-        'special_discount': 0.0,
-        'additional_costs': 0.0
-    })
+    """
+    Holt Preismodifikationen aus der Session (Legacy-Funktion für Kompatibilität).
+    Verwendet die neue einheitliche Implementierung.
+    """
+    return _get_pricing_modifications_from_session_unified()
 
 def _calculate_final_price_with_modifications(base_price: float, modifications: Dict[str, Any]) -> tuple:
-    """Berechnet finalen Preis mit Modifikationen"""
+    """
+    Berechnet finalen Preis mit Modifikationen (Legacy-Funktion für Kompatibilität).
     
+    WICHTIG: Diese Funktion wird für die Live-Vorschau verwendet.
+    Die korrekte Formel ist: Matrixpreis + Zubehör - Rabatte
+    """
+    
+    # Verwende die korrekte Formel: base_price sollte bereits Matrixpreis + Zubehör sein
     final_price = base_price
     
     # Prozentuale Rabatte/Aufschläge
     discount_percent = modifications.get('discount_percent', 0.0)
     surcharge_percent = modifications.get('surcharge_percent', 0.0)
     
-    final_price = final_price * (1 - discount_percent/100) * (1 + surcharge_percent/100)
+    # Korrekte Reihenfolge: Erst Rabatte, dann Aufschläge
+    if discount_percent > 0:
+        final_price *= (1 - discount_percent/100)
+    
+    if surcharge_percent > 0:
+        final_price *= (1 + surcharge_percent/100)
     
     # Absolute Beträge
     special_discount = modifications.get('special_discount', 0.0)
@@ -35,11 +44,61 @@ def _calculate_final_price_with_modifications(base_price: float, modifications: 
     
     final_price = final_price - special_discount + additional_costs
     
-    # Gesamte Rabatte und Aufpreise berechnen
+    # Gesamte Rabatte und Aufpreise berechnen (für Anzeige)
     total_rebates = (base_price * discount_percent/100) + special_discount
     total_surcharges = (base_price * surcharge_percent/100) + additional_costs
     
     return max(0, final_price), total_rebates, total_surcharges
+
+
+def _get_pricing_modifications_from_session_unified() -> Dict[str, float]:
+    """
+    Sammelt alle Preismodifikationen aus Session State (einheitliche Implementierung).
+    
+    Returns:
+        Dictionary mit standardisierten Preismodifikationen
+    """
+    try:
+        def _to_float(val, default=0.0):
+            try:
+                return float(val or 0.0)
+            except Exception:
+                return default
+        
+        # Sammle aus verschiedenen Session State Quellen
+        modifications = {}
+        
+        # Aus pricing_modifications Dictionary (falls vorhanden)
+        pricing_mods = st.session_state.get("pricing_modifications", {})
+        modifications["discount_percent"] = _to_float(pricing_mods.get("discount_percent", 0.0))
+        modifications["surcharge_percent"] = _to_float(pricing_mods.get("surcharge_percent", 0.0))
+        modifications["special_discount"] = _to_float(pricing_mods.get("special_discount", 0.0))
+        modifications["additional_costs"] = _to_float(pricing_mods.get("additional_costs", 0.0))
+        
+        # Aus individuellen Session State Keys (Slider-Werte haben Priorität)
+        slider_discount = _to_float(st.session_state.get("pricing_modifications_discount_slider", 0.0))
+        slider_rebates = _to_float(st.session_state.get("pricing_modifications_rebates_slider", 0.0))
+        slider_surcharge = _to_float(st.session_state.get("pricing_modifications_surcharge_slider", 0.0))
+        slider_special_costs = _to_float(st.session_state.get("pricing_modifications_special_costs_slider", 0.0))
+        slider_miscellaneous = _to_float(st.session_state.get("pricing_modifications_miscellaneous_slider", 0.0))
+        
+        # Verwende Slider-Werte falls sie höher sind (Slider haben Priorität)
+        modifications["discount_percent"] = max(modifications["discount_percent"], slider_discount)
+        modifications["surcharge_percent"] = max(modifications["surcharge_percent"], slider_surcharge)
+        modifications["special_discount"] = max(modifications["special_discount"], slider_rebates)
+        modifications["additional_costs"] = max(modifications["additional_costs"], 
+                                               slider_special_costs + slider_miscellaneous)
+        
+        return modifications
+        
+    except Exception as e:
+        print(f"Warning: Could not collect pricing modifications: {e}")
+        return {
+            'discount_percent': 0.0,
+            'surcharge_percent': 0.0,
+            'special_discount': 0.0,
+            'additional_costs': 0.0
+        }
 
 def _calculate_electricity_costs_projection(results: Dict[str, Any], years: int, price_increase: float) -> float:
     """Berechnet Stromkosten-Projektion ohne PV"""
