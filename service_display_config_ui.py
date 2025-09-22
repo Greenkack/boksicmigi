@@ -33,7 +33,7 @@ def render_service_display_config(pdf_design_config: Dict[str, Any]) -> None:
     _ensure_defaults(pdf_design_config)
 
     with st.expander("Darstellung Dienstleistungen (Seite 6)", expanded=False):
-    col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
         with col1:
             symbol_options = ["check", "checkbox", "dot", "none"]
             labels_map = {
