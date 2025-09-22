@@ -394,6 +394,34 @@ PLACEHOLDER_MAPPING.update({
         "38,01 % .": "sustainability_co2_reduction_percent",  # zweite Variante (geändertes Template)
 })
 
+# Seite 6 – Zusammenfassung (Labels -> dynamische Werte)
+PLACEHOLDER_MAPPING.update({
+    "X_ANLAGE_KWP": "anlage_kwp",
+    "X_MODULE_COUNT": "pv_modules_count_with_unit",
+    "X_MODUL_WATT": "module_power_per_panel_watt",
+    "X_WR_LEISTUNG": "inverter_total_power_kw",
+    "X_SPEICHER": "storage_capacity_kwh",
+    "X_JAHRESPROD": "annual_pv_production_kwh",
+    "X_EIGENVERBR": "self_consumption_percent",
+    "X_AUTARKIE": "self_supply_rate_percent",
+    "X_EEG_EUR": "annual_feed_in_revenue_eur",
+    "X_SAVINGS_TOTAL": "total_annual_savings_eur",
+    "X_DIR_EUR": "self_consumption_without_battery_eur",
+    "X_FEED_EUR": "annual_feed_in_revenue_eur",
+    "X_TAX_EUR": "tax_benefits_eur",
+    "X_AMORT": "amortization_time",
+    "X_MOD_GAR": "module_guarantee_combined",
+    "X_WR_GAR": "inverter_guarantee_text",
+    "X_SPEICHER_GAR": "storage_warranty_text",
+    # Für die Zusammenfassung verwenden wir eine saubere CO2 Zahl ohne Ellipse
+    "X_CO2_KG": "sustainability_annual_co2_savings_kg_clean",
+    "X_CO2_REDUKTION": "sustainability_co2_reduction_percent",
+    "X_CO2_KM": "sustainability_car_km_equivalent_long",
+    "X_CO2_BAEUME": "sustainability_tree_equivalent_with_label",
+    # Kombinierte Systemkonfiguration eigener Key
+    "X_SYS_CONF": "summary_system_configuration",
+})
+
 
 def fmt_number(value: Any, decimal_places: int = 2, suffix: str = "", force_german: bool = True) -> str:
     """Formatiert Zahlen im deutschen Format mit Punkt als Tausendertrennzeichen und Komma als Dezimaltrennzeichen."""
@@ -2882,5 +2910,31 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         print(f"  annual_co2_kg={annual_co2_kg:.2f} | trees_equiv={trees_equiv:.2f} | car_km_equiv={car_km_equiv:.2f} | co2_reduction_pct={co2_reduction_pct:.2f}")
     except Exception as e:
         print(f"WARN Seite5 Nachhaltigkeit Block Fehler: {e}")
+
+    # =============================
+    # Seite 6: Zusammenfassung
+    # =============================
+    try:
+        # Saubere CO2 Zahl ohne Ellipse bereitstellen
+        if 'sustainability_annual_co2_savings_kg_ellipsis' in result:
+            # Entferne ' kg...' -> Zahl extrahieren
+            raw = result['sustainability_annual_co2_savings_kg_ellipsis']
+            m = re.search(r"([0-9\.,]+)", raw)
+            if m:
+                result['sustainability_annual_co2_savings_kg_clean'] = f"{m.group(1)} kg"
+            else:
+                result['sustainability_annual_co2_savings_kg_clean'] = raw.replace("..."," ").strip()
+        # Systemkonfiguration zusammensetzen (nur vorhandene Werte, ohne doppelte Einheiten)
+        parts = []
+        for key in ["anlage_kwp", "pv_modules_count_with_unit", "storage_capacity_kwh", "inverter_total_power_kw"]:
+            val = result.get(key)
+            if val and isinstance(val, str) and val.strip():
+                parts.append(val.strip())
+        if parts:
+            result['summary_system_configuration'] = " | ".join(parts)
+        else:
+            result['summary_system_configuration'] = ""
+    except Exception as e:
+        print(f"WARN Seite6 Zusammenfassung Block Fehler: {e}")
 
     return result
