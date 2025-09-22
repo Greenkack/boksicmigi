@@ -139,28 +139,38 @@ def render_solar_calculator(texts: Dict[str, str], module_name: Optional[str] = 
         cols_mod_top = st.columns([1, 1, 2])
         with cols_mod_top[0]:
             # Anzahl Module mit + / - Buttons
-            current_qty = int(details.get('module_quantity', 20) or 20)
-            st.number_input(
+            # Sichere Initialisierung: Falls Key noch nicht gesetzt wurde
+            if 'module_quantity_sc_v1' not in st.session_state:
+                st.session_state['module_quantity_sc_v1'] = int(details.get('module_quantity', 20) or 20)
+
+            # Wir arbeiten mit einer lokalen Variable und schreiben am Ende zurück
+            local_qty = int(st.session_state.get('module_quantity_sc_v1', 0) or 0)
+
+            # Anzeige des aktuellen Werts (read-only) + Zahleneingabe via separate number_input ohne gleichen Key Konflikt
+            new_qty = st.number_input(
                 _get_text(texts, 'module_quantity_label', 'Anzahl PV Module'),
                 min_value=0,
-                value=current_qty,
-                key='module_quantity_sc_v1'
+                value=local_qty,
+                key='module_quantity_sc_v1_input'
             )
-            # Buttons unterhalb
+
+            # Buttons unterhalb für inkrement/dekrement
             col_btn_minus, col_btn_plus = st.columns(2)
             with col_btn_minus:
                 if st.button('−', key='btn_module_qty_minus'):
-                    try:
-                        st.session_state['module_quantity_sc_v1'] = max(0, int(st.session_state.get('module_quantity_sc_v1', 0)) - 1)
-                    except Exception:
-                        st.session_state['module_quantity_sc_v1'] = 0
+                    local_qty = max(0, local_qty - 1)
             with col_btn_plus:
                 if st.button('+', key='btn_module_qty_plus'):
-                    try:
-                        st.session_state['module_quantity_sc_v1'] = int(st.session_state.get('module_quantity_sc_v1', 0)) + 1
-                    except Exception:
-                        st.session_state['module_quantity_sc_v1'] = 1
-            details['module_quantity'] = int(st.session_state.get('module_quantity_sc_v1', 0))
+                    local_qty = local_qty + 1
+
+            # Priorität: Button-Anpassungen > direkte Eingabe
+            if new_qty != st.session_state.get('module_quantity_sc_v1'):
+                # Nutzer hat direkt im number_input geändert
+                local_qty = int(new_qty)
+
+            # Nur einmal schreiben (nach Widgets), um Streamlit Mutation nach Instanziierung zu vermeiden
+            st.session_state['module_quantity_sc_v1'] = int(local_qty)
+            details['module_quantity'] = int(local_qty)
         with cols_mod_top[1]:
             # Hersteller Auswahl
             current_brand = details.get('selected_module_brand') or please_select_text

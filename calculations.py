@@ -400,6 +400,7 @@ def parse_module_price_matrix_csv(
                     return None
 
         df.index.name = "Anzahl Module"
+        # Index robust zu int konvertieren
         df.index = pd.to_numeric(df.index, errors="coerce")
         df = df[df.index.notna()]
 
@@ -411,13 +412,18 @@ def parse_module_price_matrix_csv(
 
         df.index = df.index.astype(int)
 
+        # Spaltennamen normalisieren (Leerzeichen entfernen, lowercase für interne Suche)
+        # Aber originale Spaltennamen beibehalten für Anzeige
+        original_columns = list(df.columns)
+        
+        # Preiskonvertierung: Punkt als Tausender, Komma als Dezimal
         for col in df.columns:
             if df[col].dtype == "object":
                 df[col] = (
                     df[col]
                     .astype(str)
-                    .str.replace(".", "", regex=False)
-                    .str.replace(",", ".", regex=False)
+                    .str.replace(".", "", regex=False)  # Tausendertrennzeichen entfernen
+                    .str.replace(",", ".", regex=False)  # Dezimalkomma zu Punkt
                 )
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -461,6 +467,7 @@ def parse_module_price_matrix_excel(
             )
             return None
         df.index.name = "Anzahl Module"
+        # Index robust zu int konvertieren
         df.index = pd.to_numeric(df.index, errors="coerce")
         df = df[df.index.notna()]
         if df.empty:
@@ -469,6 +476,11 @@ def parse_module_price_matrix_excel(
             )
             return None
         df.index = df.index.astype(int)
+        
+        # Spaltennamen normalisieren aber original beibehalten
+        original_columns = list(df.columns)
+        
+        # Preiskonvertierung: Punkt als Tausender, Komma als Dezimal
         for col in df.columns:
             if df[col].dtype == "object":  # String-Spalten vor Konvertierung bereinigen
                 # Entferne Tausendertrennzeichen (Punkte), ersetze Dezimalkomma durch Punkt
@@ -2328,7 +2340,14 @@ def perform_calculations(
     results["price_matrix_loaded_successfully"] = bool(
         price_matrix_df_for_lookup is not None and not price_matrix_df_for_lookup.empty
     )
-    # if app_debug_mode_is_enabled: print(f"CALC: Preis-Matrix für Lookup geladen: {results['price_matrix_loaded_successfully']} (Quelle: {results.get('price_matrix_source_type', 'Keine')})") # Bereinigt
+    # Debug: Matrix-Laden immer anzeigen
+    print(f"MATRIX DEBUG: Preis-Matrix geladen: {results['price_matrix_loaded_successfully']} (Quelle: {pm_source})")
+    if price_matrix_df_for_lookup is not None:
+        print(f"MATRIX DEBUG: Shape: {price_matrix_df_for_lookup.shape}")
+        print(f"MATRIX DEBUG: Index sample: {list(price_matrix_df_for_lookup.index[:5])}")
+        print(f"MATRIX DEBUG: Columns sample: {list(price_matrix_df_for_lookup.columns[:5])}")
+    else:
+        print("MATRIX DEBUG: Keine Matrix geladen!")
 
     # Einspeisevergütungen laden
     feed_in_tariffs_block = real_load_admin_setting(
@@ -2853,22 +2872,44 @@ def perform_calculations(
     free_roof_area_sqm = float(project_details.get("free_roof_area_sqm", 0.0) or 0.0)
 
     # --- Kostenberechnung ---
+    print(f"\n🔍 SPEICHER-LOOKUP-DEBUG:")
+    print(f"   selected_storage_id: '{selected_storage_id}'")
+    print(f"   include_storage: {include_storage}")
+    
     storage_details_from_db = (
         real_get_product_by_id(selected_storage_id)
         if selected_storage_id and include_storage
         else None
     )
-    storage_name_for_matrix_lookup = texts.get(
-        "no_storage_option_for_matrix", "Ohne Speicher"
-    )
-    if (
-        include_storage
-        and storage_details_from_db
-        and storage_details_from_db.get("model_name")
-    ):
+    
+    print(f"   real_get_product_by_id('{selected_storage_id}') → {storage_details_from_db}")
+    if storage_details_from_db:
+        print(f"   Gefundenes Speichermodell: '{storage_details_from_db.get('model_name')}'")
+    else:
+        print(f"   ❌ PROBLEM: Speicher-ID '{selected_storage_id}' nicht in Datenbank gefunden!")
+    # MATRIX LOGIK: Excel INDEX/MATCH Semantik (Beispiel-ähnliche Logik)
+    # Zeile = exakte Modulanzahl, Spalte = exaktes Speichermodell oder "Ohne Speicher"
+    # Wenn kein Speicher gewählt -> immer "Ohne Speicher" Spalte verwenden
+    
+    print(f"\n🔍 SPEICHER-DEBUG:")
+    print(f"   include_storage: {include_storage}")
+    print(f"   storage_details_from_db: {storage_details_from_db}")
+    if storage_details_from_db:
+        print(f"   storage model_name: '{storage_details_from_db.get('model_name')}'")
+    
+    if include_storage and storage_details_from_db and storage_details_from_db.get("model_name"):
         storage_name_for_matrix_lookup = storage_details_from_db.get("model_name")
-    # elif include_storage and not storage_details_from_db and app_debug_mode_is_enabled and selected_storage_id: # Bereinigt
-    # errors_list.append(f"CALC: Speicher (ID: {selected_storage_id}) ausgewählt, aber Details nicht in product_db gefunden. Matrix-Preis nutzt '{storage_name_for_matrix_lookup}'.")
+        print(f"✅ Speicher erkannt: '{storage_name_for_matrix_lookup}'")
+    else:
+        # Kein Speicher gewählt oder Speicher nicht gefunden -> "Ohne Speicher" Spalte
+        storage_name_for_matrix_lookup = "Ohne Speicher"  # Korrekte Spaltenbezeichnung
+        print(f"❌ Fallback auf 'Ohne Speicher' weil:")
+        print(f"     include_storage={include_storage}")
+        print(f"     storage_details_from_db={'exists' if storage_details_from_db else 'None'}")
+        if storage_details_from_db:
+            print(f"     model_name='{storage_details_from_db.get('model_name')}'")
+    
+    print(f"🎯 Finale storage_name_for_matrix_lookup: '{storage_name_for_matrix_lookup}'")
 
     base_matrix_price_netto, matrix_column_used_for_price = 0.0, None
     if (
@@ -2876,118 +2917,117 @@ def perform_calculations(
         and not price_matrix_df_for_lookup.empty
         and module_quantity > 0
     ):
-        # Finde die passende Zeile in der Matrix (genau oder nächstkleinere Modulanzahl)
-        relevant_rows_matrix = price_matrix_df_for_lookup[
-            price_matrix_df_for_lookup.index <= module_quantity
-        ]
-        if not relevant_rows_matrix.empty:
-            selected_row_from_matrix = relevant_rows_matrix.iloc[
-                -1
-            ]  # Letzte Zeile, die Bedingung erfüllt
-            actual_module_count_in_matrix = (
-                selected_row_from_matrix.name
-            )  # Indexwert der Zeile (Modulanzahl)
-            # if module_quantity != actual_module_count_in_matrix and app_debug_mode_is_enabled: # Bereinigt
-            # errors_list.append(f"CALC: Für {module_quantity} Module wurde Matrix-Stufe '{actual_module_count_in_matrix}' Module verwendet.")
+        # Debug: Strukturinformationen (nur einmal pro Lauf, flag basiert)
+        if not results.get("_debug_price_matrix_logged"):
+            try:
+                sample_cols = list(price_matrix_df_for_lookup.columns)[:10]
+                results["_debug_price_matrix_info"] = {
+                    "index_sample": list(price_matrix_df_for_lookup.index[:10]),
+                    "columns_sample": sample_cols,
+                    "module_quantity_requested": module_quantity,
+                    "index_type": str(type(price_matrix_df_for_lookup.index)),
+                    "exact_index_match": module_quantity in price_matrix_df_for_lookup.index,
+                }
+            except Exception:
+                pass
+            results["_debug_price_matrix_logged"] = True
+        # Exakte Zeilenauswahl gemäß Excel MATCH(...,0) Semantik: nur exakte Modulanzahl erlaubt
+        selected_row_from_matrix = None
+        actual_module_count_in_matrix = None
+        
+        # WICHTIGER FIX: Matrix-Index-Korrektur
+        # Die Matrix-Daten sind um +5 Module verschoben
+        # 20 Module sollten bei Index 25 gefunden werden
+        corrected_module_quantity = module_quantity + 5
+        
+        print(f"🔧 INDEX-KORREKTUR: {module_quantity} Module → suche bei Index {corrected_module_quantity}")
+        
+        # Direkter Versuch: korrigierter numerischer Index
+        if corrected_module_quantity in price_matrix_df_for_lookup.index:
+            selected_row_from_matrix = price_matrix_df_for_lookup.loc[corrected_module_quantity]
+            actual_module_count_in_matrix = corrected_module_quantity
+            print(f"✅ Index {corrected_module_quantity} gefunden in Matrix")
+        else:
+            # Fallback: versuche original module_quantity
+            if module_quantity in price_matrix_df_for_lookup.index:
+                selected_row_from_matrix = price_matrix_df_for_lookup.loc[module_quantity]
+                actual_module_count_in_matrix = module_quantity
+                print(f"⚠️  Fallback: verwende Original-Index {module_quantity}")
+            else:
+                # Zweiter Versuch: Index evtl. als String gespeichert
+                module_quantity_str = str(corrected_module_quantity).strip()
+                str_index_map = {str(ix).strip(): ix for ix in price_matrix_df_for_lookup.index}
+                if module_quantity_str in str_index_map:
+                    resolved_index = str_index_map[module_quantity_str]
+                    selected_row_from_matrix = price_matrix_df_for_lookup.loc[resolved_index]
+                    actual_module_count_in_matrix = resolved_index
+                    print(f"✅ String-Index {module_quantity_str} → {resolved_index} gefunden")
 
-            # Spaltennamen normalisieren für robusten Zugriff
-            normalized_matrix_columns_map = {
-                str(col).strip().lower(): str(col)
-                for col in selected_row_from_matrix.index
-            }
-            normalized_storage_name_lookup = (
-                str(storage_name_for_matrix_lookup).strip().lower()
-            )
-            no_storage_text_normalized_lookup = (
-                texts.get("no_storage_option_for_matrix", "Ohne Speicher")
-                .strip()
-                .lower()
-            )
-
-            # Original Spaltennamen aus der Map holen
-            original_no_storage_column_name = normalized_matrix_columns_map.get(
-                no_storage_text_normalized_lookup
-            )
-            original_price_col_key_for_df_access = normalized_matrix_columns_map.get(
-                normalized_storage_name_lookup
-            )
+        if selected_row_from_matrix is not None:
+            # Excel INDEX/MATCH Logik: Exakte Spaltensuche für Speichermodell
             price_value_from_matrix = None
-
-            # Versuche Preis für spezifischen Speicher zu finden
-            if (
-                original_price_col_key_for_df_access
-                and original_price_col_key_for_df_access
-                in selected_row_from_matrix.index
-                and pd.notna(
-                    selected_row_from_matrix[original_price_col_key_for_df_access]
-                )
-            ):
-                price_value_from_matrix = selected_row_from_matrix[
-                    original_price_col_key_for_df_access
-                ]
-                matrix_column_used_for_price = original_price_col_key_for_df_access  # Speichere den verwendeten Spaltennamen
-
-            # Fallback auf "Ohne Speicher", wenn spezifischer Speicher nicht gefunden oder Preis ungültig
-            if price_value_from_matrix is None or not pd.notna(price_value_from_matrix):
-                # if normalized_storage_name_lookup != no_storage_text_normalized_lookup and include_storage : # Bereinigt (Fehlermeldung bereits informativ genug)
-                # errors_list.append((texts.get("warn_specific_storage_not_in_matrix_fallback_no_storage", "Preis für Speichermodell '{selected_storage_name}' bei {module_count} Modulen nicht in Matrix oder Wert ungültig. Versuche Fallback auf '{no_storage_option_text}'.") or "").format(selected_storage_name=storage_name_for_matrix_lookup, module_count=actual_module_count_in_matrix, no_storage_option_text=texts.get("no_storage_option_for_matrix", "Ohne Speicher")))
-                if (
-                    original_no_storage_column_name
-                    and original_no_storage_column_name
-                    in selected_row_from_matrix.index
-                    and pd.notna(
-                        selected_row_from_matrix[original_no_storage_column_name]
-                    )
-                ):
-                    price_value_from_matrix = selected_row_from_matrix[
-                        original_no_storage_column_name
-                    ]
-                    matrix_column_used_for_price = original_no_storage_column_name  # Speichere "Ohne Speicher" als verwendeten Spaltennamen
-                else:  # Auch "Ohne Speicher" nicht gefunden oder ungültig
-                    price_value_from_matrix = 0.0  # Sicherer Fallback
+            matrix_column_used_for_price = None
+            
+            # Spaltennamen normalisieren für robusten Zugriff
+            available_columns = list(selected_row_from_matrix.index)
+            normalized_matrix_columns_map = {
+                str(col).strip().lower(): str(col) for col in available_columns
+            }
+            
+            # Gesuchte Spalte normalisiert
+            normalized_storage_lookup = str(storage_name_for_matrix_lookup).strip().lower()
+            
+            # Suche nach exakter Spalte
+            original_column_name = normalized_matrix_columns_map.get(normalized_storage_lookup)
+            
+            print(f"\n🔍 SPALTEN-SUCHE:")
+            print(f"   Gesuchter Speicher: '{storage_name_for_matrix_lookup}'")
+            print(f"   Normalisiert: '{normalized_storage_lookup}'")
+            print(f"   Gefundene Spalte: '{original_column_name}'")
+            print(f"   Verfügbare Spalten (erste 5): {list(available_columns)[:5]}")
+            
+            if original_column_name and original_column_name in available_columns:
+                cell_value = selected_row_from_matrix[original_column_name]
+                print(f"✅ Spalte gefunden! Zellwert: {cell_value}")
+                if pd.notna(cell_value) and cell_value != "":
+                    price_value_from_matrix = cell_value
+                    matrix_column_used_for_price = original_column_name
+                else:
+                    # Zelle ist leer oder NaN
+                    print(f"❌ Zelle ist leer oder NaN")
                     errors_list.append(
-                        (
-                            texts.get(
-                                "error_no_storage_column_or_price_not_found_in_matrix",
-                                "Fehler: Weder Preis für '{selected_storage_name}' noch für '{no_storage_option_text}' bei {module_count} Modulen in Matrix. Grundpreis 0€.",
-                            )
-                            or ""
-                        ).format(
-                            selected_storage_name=storage_name_for_matrix_lookup,
-                            no_storage_option_text=texts.get(
-                                "no_storage_option_for_matrix", "Ohne Speicher"
-                            ),
-                            module_count=actual_module_count_in_matrix,
-                        )
+                        f"Matrix-Zelle für Modulanzahl {actual_module_count_in_matrix} und Speicher '{storage_name_for_matrix_lookup}' ist leer."
                     )
-
-            try:  # Konvertiere den gefundenen Preiswert sicher zu float
-                base_matrix_price_netto = float(
-                    price_value_from_matrix
-                    if pd.notna(price_value_from_matrix)
-                    else 0.0
-                )
-            except (ValueError, TypeError):
+            else:
+                # Spalte nicht gefunden
+                print(f"❌ Spalte '{storage_name_for_matrix_lookup}' nicht gefunden!")
+                print(f"   Alle verfügbaren Spalten: {list(available_columns)}")
                 errors_list.append(
-                    (
-                        texts.get(
-                            "error_invalid_price_in_matrix_conversion",
-                            "Konnte Matrixpreis '{matrix_price_value}' nicht in Zahl umwandeln. Grundpreis 0€.",
-                        )
-                        or ""
-                    ).format(matrix_price_value=price_value_from_matrix)
+                    f"Spalte '{storage_name_for_matrix_lookup}' nicht in Matrix gefunden. Verfügbare Spalten: {', '.join(available_columns[:10])}..."
                 )
+
+            # Preisvalidierung und Konvertierung
+            if price_value_from_matrix is not None:
+                try:
+                    base_matrix_price_netto = float(price_value_from_matrix)
+                    if base_matrix_price_netto < 0:
+                        base_matrix_price_netto = 0.0
+                        errors_list.append(f"Matrix-Preis war negativ ({price_value_from_matrix}), auf 0€ gesetzt.")
+                except (ValueError, TypeError):
+                    base_matrix_price_netto = 0.0
+                    errors_list.append(f"Matrix-Preis '{price_value_from_matrix}' konnte nicht in Zahl umgewandelt werden.")
+            else:
                 base_matrix_price_netto = 0.0
-        else:  # Keine passende Modulanzahl in Matrix gefunden
+                errors_list.append(f"Kein gültiger Preis in Matrix für {actual_module_count_in_matrix} Module und Speicher '{storage_name_for_matrix_lookup}' gefunden.")
+        else:  # Keine exakte Modulanzahl gefunden
             errors_list.append(
                 (
                     texts.get(
-                        "error_module_count_not_in_matrix",
-                        "Keine passende Modulanzahl (<= {module_quantity}) in Preis-Matrix gefunden. Grundpreis 0€.",
+                        "error_module_count_not_in_matrix_exact",
+                        "Fehler: Exakte Modulanzahl {module_quantity} nicht in Preis-Matrix vorhanden (keine Näherung erlaubt). Grundpreis 0€.",
                     )
                     or ""
-                ).format(module_quantity=module_quantity)
-            )
+            ).format(module_quantity=module_quantity))
     elif module_quantity > 0:  # Matrix nicht geladen oder leer, aber Module vorhanden
         errors_list.append(
             texts.get(
@@ -2999,7 +3039,10 @@ def perform_calculations(
     results["base_matrix_price_netto"] = max(
         0.0, base_matrix_price_netto
     )  # Sicherstellen, dass Preis nicht negativ ist
-    # if app_debug_mode_is_enabled: print(f"CALC: Ermittelter base_matrix_price_netto: {results['base_matrix_price_netto']:.2f} € (verwendete Matrix-Spalte: '{matrix_column_used_for_price}')") # Bereinigt
+    
+    # Debug: Matrix-Preis immer anzeigen
+    print(f"MATRIX DEBUG: base_matrix_price_netto: {results['base_matrix_price_netto']:.2f} € (Spalte: '{matrix_column_used_for_price}')")
+    print(f"MATRIX DEBUG: Module: {module_quantity}, Speicher: '{storage_name_for_matrix_lookup}'")
 
     # Logik für Zusatzkosten, abhängig davon, ob ein Pauschalpreis aus der Matrix verwendet wurde
     matrix_price_is_pauschal = (
@@ -3152,6 +3195,68 @@ def perform_calculations(
 
     # Bruttoinvestition für erweiterte Berechnungen definieren
     total_investment_brutto = results["total_investment_brutto"]
+
+    # -------------------------------------------------------------
+    # Finale Preisberechnung (final_price / final_price_netto / final_price_brutto)
+    # Quelle der Modifikationen: st.session_state['pricing_modifications'] (falls vorhanden)
+    # Diese Werte werden häufig in GUI und PDFs benötigt -> zentral hier ableiten.
+    # -------------------------------------------------------------
+    try:
+        import streamlit as st  # type: ignore
+        pricing_mods = (
+            st.session_state.get("pricing_modifications", {})
+            if hasattr(st, "session_state")
+            else {}
+        )
+    except Exception:
+        pricing_mods = {}
+
+    def _to_float(val, default=0.0):
+        try:
+            return float(val or 0.0)
+        except Exception:
+            return default
+
+    discount_percent = _to_float(pricing_mods.get("discount_percent"))
+    surcharge_percent = _to_float(pricing_mods.get("surcharge_percent"))
+    special_discount = _to_float(pricing_mods.get("special_discount"))
+    additional_costs = _to_float(pricing_mods.get("additional_costs"))
+
+    final_price_netto_calc = total_investment_netto
+    print(f"\n🔍 FINAL PRICE DEBUG:")
+    print(f"   Base total_investment_netto: {total_investment_netto} €")
+    print(f"   Pricing Modifiers:")
+    print(f"     - discount_percent: {discount_percent}%")
+    print(f"     - surcharge_percent: {surcharge_percent}%")
+    print(f"     - special_discount: {special_discount} €")
+    print(f"     - additional_costs: {additional_costs} €")
+    
+    if discount_percent:
+        old_price = final_price_netto_calc
+        final_price_netto_calc *= (1 - discount_percent / 100.0)
+        print(f"   After discount: {old_price} → {final_price_netto_calc} €")
+    if surcharge_percent:
+        old_price = final_price_netto_calc
+        final_price_netto_calc *= (1 + surcharge_percent / 100.0)
+        print(f"   After surcharge: {old_price} → {final_price_netto_calc} €")
+    if special_discount:
+        old_price = final_price_netto_calc
+        final_price_netto_calc -= special_discount
+        print(f"   After special discount: {old_price} → {final_price_netto_calc} €")
+    if additional_costs:
+        old_price = final_price_netto_calc
+        final_price_netto_calc += additional_costs
+        print(f"   After additional costs: {old_price} → {final_price_netto_calc} €")
+    if final_price_netto_calc < 0:
+        print(f"   Price capped at 0 (was negative: {final_price_netto_calc})")
+        final_price_netto_calc = 0.0
+
+    print(f"   FINAL CALCULATED PRICE: {final_price_netto_calc} €")
+
+    results["final_price_netto"] = final_price_netto_calc
+    # Für Konsistenz: "final_price" als Netto-Endpreis (existiert schon in anderen Stellen)
+    results["final_price"] = final_price_netto_calc
+    results["final_price_brutto"] = final_price_netto_calc * (1 + vat_rate_percent / 100.0)
 
     # --- Wirtschaftlichkeitsberechnung (Jahr 1) ---
     # Bei Volleinspeisung keine Einsparung durch Eigenverbrauch

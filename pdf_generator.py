@@ -3011,7 +3011,8 @@ def _validate_pdf_data_availability(project_data: Dict[str, Any], analysis_resul
         validation_result['critical_errors'].append(
             get_text(texts, 'pdf_error_no_analysis', 'Keine Analyseergebnisse verfügbar - PDF kann nicht erstellt werden')
         )
-        validation_result['is_valid'] = True
+        # Kritischer Zustand: is_valid muss False sein, damit Fallback sauber greift
+        validation_result['is_valid'] = False
         validation_result['missing_data_summary'].append('Analyseergebnisse')
     else:
         # Wenn die Analyse mindestens einige Werte enthält, betrachten wir es als gültig

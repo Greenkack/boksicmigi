@@ -1613,6 +1613,15 @@ def render_pdf_design_settings(load_admin_setting_func: Callable, save_admin_set
                 if field_key == "city" and "zip_code" in [f[0] for f in [("name","name"), ("street","address1"), ("zip_code","address2_zip"), ("city","address2_city"), ("phone","phone"), ("email","email"), ("website","website"), ("tax_id","tax_id"), ("commercial_register","commercial_register")]]: continue
                 st.text_input(get_text_local(f"admin_pdf_company_{label_key_suffix}", field_key.replace("_"," ").title()), value=val_disp, disabled=True, key=f"pdf_disp_ci_{field_key}{WIDGET_KEY_SUFFIX}")
             st.caption(get_text_local("admin_pdf_company_info_manage_in_companies", "Firmeninformationen werden in 'Firmenverwaltung' gepflegt..."))
+        st.markdown("---")
+        st.subheader("Seite 6 Darstellung: Dienstleistungen & Produkte")
+        try:
+            from service_display_config_ui import render_service_display_config
+            if 'pdf_design_config' not in st.session_state:
+                st.session_state['pdf_design_config'] = {}
+            render_service_display_config(st.session_state['pdf_design_config'], inline=True)
+        except Exception as e_srv_cfg:
+            st.warning(f"Service Darstellungs-UI nicht geladen: {e_srv_cfg}")
         st.markdown("---"); st.subheader(get_text_local("admin_pdf_design_colors_header", "PDF Design Farben"))
         PDF_DESIGN_SETTINGS_DEFAULT = {'primary_color': '#4F81BD', 'secondary_color': '#C0C0C0'}
         current_design_settings = load_admin_setting_func('pdf_design_settings', PDF_DESIGN_SETTINGS_DEFAULT.copy())

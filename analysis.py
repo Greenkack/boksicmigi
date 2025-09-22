@@ -7151,9 +7151,9 @@ def render_analysis(
         kpi_cols_row1 = st.columns(3)
         kpi_cols_row2 = st.columns(3)
         kpi_cols_row1[0].metric(
-            label=get_text(texts, "total_investment_brutto"),
+            label=get_text(texts, "base_matrix_price_netto"),
             value=format_kpi_value(
-                results_for_display.get("total_investment_brutto"), "€", texts_dict=texts
+                results_for_display.get("base_matrix_price_netto"), "€", texts_dict=texts
             ),
         )
         kpi_cols_row1[1].metric(

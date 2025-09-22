@@ -1058,7 +1058,7 @@ def render_pdf_ui(
         # Vereinheitlichte Dienstleistungs-Darstellung (ausgelagert)
         try:
             from service_display_config_ui import render_service_display_config
-            render_service_display_config(pdf_design_config)
+            render_service_display_config(pdf_design_config, inline=True)
         except Exception as e:
             st.warning(f"Service Display UI konnte nicht geladen werden: {e}")
 

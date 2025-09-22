@@ -3012,8 +3012,24 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
                        or analysis_results.get('pdf_design_config')
                        or project_data.get('inclusion_options', {}).get('pdf_design_config')
                        or {})
+
+        # Merge mit aktueller Session-State Konfiguration (falls UI Änderungen noch
+        # nicht in project_data übernommen wurden). Session-Werte überschreiben.
+        try:  # defensiv – funktioniert auch außerhalb Streamlit-Kontext
+            import streamlit as st  # type: ignore
+            if 'pdf_design_config' in st.session_state:
+                session_cfg = st.session_state.get('pdf_design_config') or {}
+                if isinstance(session_cfg, dict) and session_cfg:
+                    # Session überschreibt vorhandene Keys (nur nicht-None Werte)
+                    merged = dict(design_cfg)
+                    for _k, _v in session_cfg.items():
+                        if _v is not None:
+                            merged[_k] = _v
+                    design_cfg = merged
+        except Exception:
+            pass
         checkmarks_on = bool(design_cfg.get('service_checkmarks_enabled', True))
-        symbol_style = design_cfg.get('service_symbol_style', 'check')  # check|checkbox|dot|none
+        symbol_style = design_cfg.get('service_symbol_style', 'none')  # check|checkbox|dot|none (Default geändert auf 'none')
         hide_value_col = bool(design_cfg.get('service_value_column_hidden', False))
         symbol_color = design_cfg.get('service_symbol_color')  # Hex
         label_color = design_cfg.get('service_label_color')

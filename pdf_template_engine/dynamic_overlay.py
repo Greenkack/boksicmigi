@@ -944,13 +944,13 @@ def _draw_page4_component_images(c: canvas.Canvas, dynamic_data: Dict[str, str],
     """
     try:
         images = [
-            (dynamic_data.get("storage_image_b64"), {
+            (dynamic_data.get("modul_image_b64"), {
                 "x": 50.0, "y_top": page_height - 250.0, "max_w": 140.0, "max_h": 90.0
             }),
             (dynamic_data.get("inverter_image_b64"), {
                 "x": 50.0, "y_top": page_height - 440.0, "max_w": 140.0, "max_h": 90.0
             }),
-            (dynamic_data.get("modul_image_b64"), {
+            (dynamic_data.get("storage_image_b64"), {
                 "x": 50.0, "y_top": page_height - 630.0, "max_w": 140.0, "max_h": 90.0
             }),
         ]
