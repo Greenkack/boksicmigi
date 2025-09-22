@@ -1177,9 +1177,42 @@ def render_pdf_ui(
         #  ERWEITERTE PDF-FEATURES UI INTEGRATION
         st.markdown("---")
         st.markdown("###  ERWEITERTE PDF-FEATURES")
+
+        # Neue Sektion: Dienstleistungen Seite 6 (Produkte & Services)
+        st.markdown("---")
+        st.markdown("**Dienstleistungen (Seite 6)**")
+        if 'pdf_services' not in st.session_state:
+            st.session_state.pdf_services = {
+                'extras_enabled': False,
+                # optionale service flags
+                'service_additional_tasks': False,
+                'service_wallbox_cabling': False,
+                'service_backup_power_activation': False,
+                'service_energy_management_system': False,
+                'service_dynamic_tariff_activation': False,
+                'custom_entries': ''
+            }
+        pdf_services_state = st.session_state.pdf_services
+        pdf_services_state['extras_enabled'] = st.checkbox("Extras / Sonstiges aktivieren?", value=pdf_services_state.get('extras_enabled', False), key="pdf_services_extras_enabled_v1")
+        if pdf_services_state['extras_enabled']:
+            with st.expander("Optionale Dienstleistungen auswählen", expanded=True):
+                col_srv1, col_srv2 = st.columns(2)
+                with col_srv1:
+                    pdf_services_state['service_additional_tasks'] = st.checkbox("Weitere Tätigkeiten", value=pdf_services_state.get('service_additional_tasks', False), key="pdf_srv_additional_tasks_v1")
+                    pdf_services_state['service_wallbox_cabling'] = st.checkbox("Leitungsverlegung Wallbox", value=pdf_services_state.get('service_wallbox_cabling', False), key="pdf_srv_wallbox_cabling_v1")
+                    pdf_services_state['service_backup_power_activation'] = st.checkbox("Aktivierung Notstromversorgung", value=pdf_services_state.get('service_backup_power_activation', False), key="pdf_srv_backup_activation_v1")
+                with col_srv2:
+                    pdf_services_state['service_energy_management_system'] = st.checkbox("Installation Energiemanagementsystem", value=pdf_services_state.get('service_energy_management_system', False), key="pdf_srv_energy_management_v1")
+                    pdf_services_state['service_dynamic_tariff_activation'] = st.checkbox("Aktivierung dynamischer Stromtarif", value=pdf_services_state.get('service_dynamic_tariff_activation', False), key="pdf_srv_dynamic_tariff_v1")
+                pdf_services_state['custom_entries'] = st.text_area("Sonstige / individuelle Eintragungen (eine pro Zeile oder mit Semikolon)", value=pdf_services_state.get('custom_entries',''), key="pdf_services_custom_entries_v1", height=100)
+        # Speichere zurück
+        st.session_state.pdf_services = pdf_services_state
+        # Beim Absenden in project_data injizieren (späterer Zugriff im build_dynamic_data)
+        if 'project_data' in locals() and isinstance(project_data, dict):
+            project_data['pdf_services'] = dict(pdf_services_state)
         
         st.markdown("---")
-        submitted_generate_pdf = st.form_submit_button(label=f"**{get_text_pdf_ui(texts, 'pdf_generate_button', 'Angebots-PDF erstellen')}**", type="primary", disabled=submit_button_disabled)
+    submitted_generate_pdf = st.form_submit_button(label=f"**{get_text_pdf_ui(texts, 'pdf_generate_button', 'Angebots-PDF erstellen')}**", type="primary", disabled=submit_button_disabled)
         if submitted_generate_pdf: # Werte aus temporären Keys in die Haupt-Session-State-Keys übernehmen
             append_after_main7_flag_submit = bool(st.session_state.pdf_inclusion_options.get("append_additional_pages_after_main7", False))
             if append_after_main7_flag_submit:

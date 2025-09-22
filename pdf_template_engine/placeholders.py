@@ -422,6 +422,34 @@ PLACEHOLDER_MAPPING.update({
     "X_SYS_CONF": "summary_system_configuration",
 })
 
+# Seite 6 – Dienstleistungsplatzhalter (Standard & optional)
+PLACEHOLDER_MAPPING.update({
+    # Produkte (werden auf Seite 6 erneut gelistet)
+    "X_PROD_MODULE": "summary_product_module_line",
+    "X_PROD_INVERTER": "summary_product_inverter_line",
+    "X_PROD_STORAGE": "summary_product_storage_line",
+
+    # Standard-Dienstleistungen (immer standardmäßig aktiv)
+    "X_SRV_BERATUNG": "service_consulting",
+    "X_SRV_PLANUNG": "service_planning",
+    "X_SRV_PROJEKTIERUNG": "service_project_management",
+    "X_SRV_OPTIMIERUNG": "service_optimization",
+    "X_SRV_EVU_GENEHMIGUNG": "service_grid_application",
+    "X_SRV_DC_MONTAGE": "service_dc_installation",
+    "X_SRV_AC_INSTALLATION": "service_ac_installation",
+    "X_SRV_SPEICHER_INSTALLATION": "service_storage_installation",
+    "X_SRV_INBETRIEBNAHME": "service_commissioning_training",
+    "X_SRV_FERTIGMELDUNG_EVU": "service_grid_completion",
+
+    # Optionale Dienstleistungen
+    "X_SRV_WEITERE": "service_additional_tasks",
+    "X_SRV_WALLBOX_LEITUNG": "service_wallbox_cabling",
+    "X_SRV_NOTSTROM_AKTIVIERUNG": "service_backup_power_activation",
+    "X_SRV_ENERGIEMANAGEMENT": "service_energy_management_system",
+    "X_SRV_DYNAMISCHER_TARIF": "service_dynamic_tariff_activation",
+    "X_SRV_SONSTIGES": "service_custom_entries_joined",
+})
+
 
 def fmt_number(value: Any, decimal_places: int = 2, suffix: str = "", force_german: bool = True) -> str:
     """Formatiert Zahlen im deutschen Format mit Punkt als Tausendertrennzeichen und Komma als Dezimaltrennzeichen."""
@@ -2934,6 +2962,84 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
             result['summary_system_configuration'] = " | ".join(parts)
         else:
             result['summary_system_configuration'] = ""
+
+        # Produkt-Zeilen für Seite 6 (Module, WR, Speicher) – kompakte Zusammenfassung
+        def _clean(v: str) -> str:
+            return (v or '').replace('\n',' ').strip()
+        mod_line_parts = []
+        if result.get('module_manufacturer'): mod_line_parts.append(_clean(result['module_manufacturer']))
+        if result.get('module_model'): mod_line_parts.append(_clean(result['module_model']))
+        if result.get('module_power_per_panel_watt'): mod_line_parts.append(_clean(result['module_power_per_panel_watt']))
+        if result.get('pv_modules_count_with_unit'): mod_line_parts.append(_clean(result['pv_modules_count_with_unit']))
+        result['summary_product_module_line'] = ' | '.join(mod_line_parts)
+
+        inv_line_parts = []
+        if result.get('inverter_manufacturer'): inv_line_parts.append(_clean(result['inverter_manufacturer']))
+        if result.get('inverter_model'): inv_line_parts.append(_clean(result['inverter_model']))
+        if result.get('inverter_total_power_kw'): inv_line_parts.append(_clean(result['inverter_total_power_kw']))
+        result['summary_product_inverter_line'] = ' | '.join(inv_line_parts)
+
+        stor_line_parts = []
+        if result.get('storage_manufacturer'): stor_line_parts.append(_clean(result['storage_manufacturer']))
+        if result.get('storage_model'): stor_line_parts.append(_clean(result['storage_model']))
+        if result.get('storage_capacity_kwh'): stor_line_parts.append(_clean(result['storage_capacity_kwh']))
+        result['summary_product_storage_line'] = ' | '.join(stor_line_parts)
+
+        # Dienstleistungen – Standard & Optional
+        standard_services = {
+            'service_consulting': 'Beratung enthalten',
+            'service_planning': 'Planung enthalten',
+            'service_project_management': 'Projektierung enthalten',
+            'service_optimization': 'Optimierung enthalten',
+            'service_grid_application': 'Anmeldung / Genehmigung EVU enthalten',
+            'service_dc_installation': 'DC Montagearbeiten enthalten',
+            'service_ac_installation': 'AC Elektroinstallationsarbeiten enthalten',
+            'service_storage_installation': 'Installation Batteriespeicher enthalten',
+            'service_commissioning_training': 'Inbetriebnahme & Einweisung enthalten',
+            'service_grid_completion': 'Fertigmeldung bei EVU enthalten',
+        }
+        optional_services = {
+            'service_additional_tasks': 'Weitere Tätigkeiten',
+            'service_wallbox_cabling': 'Leitungsverlegung Wallbox',
+            'service_backup_power_activation': 'Aktivierung Notstromversorgung',
+            'service_energy_management_system': 'Installation Energiemanagementsystem',
+            'service_dynamic_tariff_activation': 'Aktivierung dynamischer Stromtarif',
+        }
+
+        # Nutzer-Auswahl aus project_data -> erwartet Struktur project_data['pdf_services'] = {key: bool, 'custom': '...'}
+        pdf_services_cfg = project_data.get('pdf_services') if isinstance(project_data, dict) else None
+        if not isinstance(pdf_services_cfg, dict):
+            pdf_services_cfg = {}
+
+        # Checkbox-Modus 'extras_enabled' (setzt optionalen Block frei)
+        extras_enabled = bool(pdf_services_cfg.get('extras_enabled', False))
+
+        # Standard-Services immer aktiv, außer explizit deaktiviert (allow_disable flag optional)
+        for k, label in standard_services.items():
+            disabled_flag = pdf_services_cfg.get(f"disable_{k}")
+            if disabled_flag:
+                result[k] = ''  # leer => Feld kann vom Renderer unterdrückt werden
+            else:
+                result[k] = label
+
+        # Optionale Services nur wenn extras_enabled und Flag aktiv
+        for k, label in optional_services.items():
+            if extras_enabled and pdf_services_cfg.get(k, False):
+                result[k] = label + ' enthalten'
+            else:
+                result[k] = ''
+
+        # Custom / Sonstiges Einträge (Textarea, Zeilenumbrüche oder Semikolon trennen)
+        custom_raw = pdf_services_cfg.get('custom_entries') or ''
+        custom_entries = []
+        if isinstance(custom_raw, str) and custom_raw.strip():
+            for part in re.split(r'[\n;]+', custom_raw):
+                p = part.strip()
+                if p:
+                    custom_entries.append(p)
+        result['service_custom_entries_joined'] = ' | '.join(custom_entries)
+    except Exception as e:
+        print(f"WARN Seite6 Zusammenfassung Block Fehler: {e}")
     except Exception as e:
         print(f"WARN Seite6 Zusammenfassung Block Fehler: {e}")
 

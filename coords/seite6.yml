@@ -1,271 +1,238 @@
-Text: ZUSAMMENFASSUNG
-Position: (70.0, 80.0, 250.0, 105.0)
+Text: PRODUKTE & DIENSTLEISTUNGEN
+Position: (70.0, 80.0, 400.0, 105.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 24.0
 Farbe: 3487029
 ---------------------------------------
-Text: Anlagengröße (kWp)
-Position: (70.0, 130.0, 250.0, 145.0)
+# Produktzeilen
+Text: Module
+Position: (70.0, 130.0, 180.0, 145.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.5
 Farbe: 3487029
 ---------------------------------------
-Text: X_ANLAGE_KWP
-Position: (300.0, 130.0, 520.0, 145.0)
+Text: X_PROD_MODULE
+Position: (200.0, 130.0, 520.0, 145.0)
 Schriftart: Helvetica-Regular
 Schriftgröße: 11.5
 Farbe: 866432
 ---------------------------------------
-Text: Module (Stück)
-Position: (70.0, 150.0, 250.0, 165.0)
+Text: Wechselrichter
+Position: (70.0, 150.0, 180.0, 165.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.5
 Farbe: 3487029
 ---------------------------------------
-Text: X_MODULE_COUNT
-Position: (300.0, 150.0, 520.0, 165.0)
+Text: X_PROD_INVERTER
+Position: (200.0, 150.0, 520.0, 165.0)
 Schriftart: Helvetica-Regular
 Schriftgröße: 11.5
 Farbe: 866432
 ---------------------------------------
-Text: Leistung je Modul
-Position: (70.0, 170.0, 250.0, 185.0)
+Text: Batteriespeicher
+Position: (70.0, 170.0, 180.0, 185.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.5
 Farbe: 3487029
 ---------------------------------------
-Text: X_MODUL_WATT
-Position: (300.0, 170.0, 520.0, 185.0)
+Text: X_PROD_STORAGE
+Position: (200.0, 170.0, 520.0, 185.0)
 Schriftart: Helvetica-Regular
 Schriftgröße: 11.5
 Farbe: 866432
 ---------------------------------------
-Text: WR Gesamtleistung
-Position: (70.0, 190.0, 250.0, 205.0)
+# Standard-Dienstleistungen
+Text: Beratung
+Position: (70.0, 200.0, 200.0, 215.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_WR_LEISTUNG
-Position: (300.0, 190.0, 520.0, 205.0)
+Text: X_SRV_BERATUNG
+Position: (200.0, 200.0, 520.0, 215.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Speicherkapazität
-Position: (70.0, 210.0, 250.0, 225.0)
+Text: Planung
+Position: (70.0, 220.0, 200.0, 235.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_SPEICHER
-Position: (300.0, 210.0, 520.0, 225.0)
+Text: X_SRV_PLANUNG
+Position: (200.0, 220.0, 520.0, 235.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Jahresproduktion (kWh)
-Position: (70.0, 230.0, 250.0, 245.0)
+Text: Projektierung
+Position: (70.0, 240.0, 200.0, 255.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_JAHRESPROD
-Position: (300.0, 230.0, 520.0, 245.0)
+Text: X_SRV_PROJEKTIERUNG
+Position: (200.0, 240.0, 520.0, 255.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Eigenverbrauch (%)
-Position: (70.0, 250.0, 250.0, 265.0)
+Text: Optimierung
+Position: (70.0, 260.0, 200.0, 275.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_EIGENVERBR
-Position: (300.0, 250.0, 520.0, 265.0)
+Text: X_SRV_OPTIMIERUNG
+Position: (200.0, 260.0, 520.0, 275.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Autarkiegrad (%)
-Position: (70.0, 270.0, 250.0, 285.0)
+Text: Anmeldung / Genehmigung EVU
+Position: (70.0, 280.0, 200.0, 295.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_AUTARKIE
-Position: (300.0, 270.0, 520.0, 285.0)
+Text: X_SRV_EVU_GENEHMIGUNG
+Position: (200.0, 280.0, 520.0, 295.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Einspeisevergütung Jahr 1
-Position: (70.0, 290.0, 260.0, 305.0)
+Text: DC Montagearbeiten
+Position: (70.0, 300.0, 200.0, 315.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_EEG_EUR
-Position: (300.0, 290.0, 520.0, 305.0)
+Text: X_SRV_DC_MONTAGE
+Position: (200.0, 300.0, 520.0, 315.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Jährliche Einsparung gesamt
-Position: (70.0, 310.0, 260.0, 325.0)
+Text: AC Elektroinstallationsarbeiten
+Position: (70.0, 320.0, 200.0, 335.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_SAVINGS_TOTAL
-Position: (300.0, 310.0, 520.0, 325.0)
+Text: X_SRV_AC_INSTALLATION
+Position: (200.0, 320.0, 520.0, 335.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Direktverbrauch Wert
-Position: (70.0, 330.0, 250.0, 345.0)
+Text: Installation Batteriespeicher
+Position: (70.0, 340.0, 220.0, 355.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_DIR_EUR
-Position: (300.0, 330.0, 520.0, 345.0)
+Text: X_SRV_SPEICHER_INSTALLATION
+Position: (200.0, 340.0, 520.0, 355.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Einspeisung Wert
-Position: (70.0, 350.0, 250.0, 365.0)
+Text: Inbetriebnahme und Einweisung
+Position: (70.0, 360.0, 220.0, 375.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_FEED_EUR
-Position: (300.0, 350.0, 520.0, 365.0)
+Text: X_SRV_INBETRIEBNAHME
+Position: (200.0, 360.0, 520.0, 375.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Steuerliche Vorteile
-Position: (70.0, 370.0, 250.0, 385.0)
+Text: Fertigmeldung bei EVU
+Position: (70.0, 380.0, 220.0, 395.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_TAX_EUR
-Position: (300.0, 370.0, 520.0, 385.0)
+Text: X_SRV_FERTIGMELDUNG_EVU
+Position: (200.0, 380.0, 520.0, 395.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Amortisationszeit (Jahre)
-Position: (70.0, 390.0, 260.0, 405.0)
+# Optionale Dienstleistungen
+Text: Weitere Tätigkeiten
+Position: (70.0, 410.0, 220.0, 425.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_AMORT
-Position: (300.0, 390.0, 520.0, 405.0)
+Text: X_SRV_WEITERE
+Position: (200.0, 410.0, 520.0, 425.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Modul Garantie
-Position: (70.0, 410.0, 250.0, 425.0)
+Text: Leitungsverlegung Wallbox
+Position: (70.0, 430.0, 220.0, 445.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_MOD_GAR
-Position: (300.0, 410.0, 520.0, 425.0)
+Text: X_SRV_WALLBOX_LEITUNG
+Position: (200.0, 430.0, 520.0, 445.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Wechselrichter Garantie
-Position: (70.0, 430.0, 260.0, 445.0)
+Text: Aktivierung Notstromversorgung
+Position: (70.0, 450.0, 220.0, 465.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_WR_GAR
-Position: (300.0, 430.0, 520.0, 445.0)
+Text: X_SRV_NOTSTROM_AKTIVIERUNG
+Position: (200.0, 450.0, 520.0, 465.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Speicher Garantie
-Position: (70.0, 450.0, 260.0, 465.0)
+Text: Installation Energiemanagementsystem
+Position: (70.0, 470.0, 230.0, 485.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_SPEICHER_GAR
-Position: (300.0, 450.0, 520.0, 465.0)
+Text: X_SRV_ENERGIEMANAGEMENT
+Position: (200.0, 470.0, 520.0, 485.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: CO2-Ersparnis (kg/Jahr)
-Position: (70.0, 470.0, 260.0, 485.0)
+Text: Aktivierung dynamischer Stromtarif
+Position: (70.0, 490.0, 230.0, 505.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_CO2_KG
-Position: (300.0, 470.0, 520.0, 485.0)
+Text: X_SRV_DYNAMISCHER_TARIF
+Position: (200.0, 490.0, 520.0, 505.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: CO2-Reduktion (%)
-Position: (70.0, 490.0, 250.0, 505.0)
-Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
-Farbe: 3487029
----------------------------------------
-Text: X_CO2_REDUKTION
-Position: (300.0, 490.0, 520.0, 505.0)
-Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
-Farbe: 866432
----------------------------------------
-Text: Auto-km Äquivalent
+Text: Sonstiges / Individuelle Eintragung
 Position: (70.0, 510.0, 250.0, 525.0)
 Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
+Schriftgröße: 11.0
 Farbe: 3487029
 ---------------------------------------
-Text: X_CO2_KM
-Position: (300.0, 510.0, 520.0, 525.0)
+Text: X_SRV_SONSTIGES
+Position: (200.0, 510.0, 520.0, 570.0)
 Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
-Farbe: 866432
----------------------------------------
-Text: Baumäquivalent
-Position: (70.0, 530.0, 250.0, 545.0)
-Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
-Farbe: 3487029
----------------------------------------
-Text: X_CO2_BAEUME
-Position: (300.0, 530.0, 520.0, 545.0)
-Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
-Farbe: 866432
----------------------------------------
-Text: Systemkonfiguration
-Position: (70.0, 550.0, 250.0, 565.0)
-Schriftart: Helvetica-Bold
-Schriftgröße: 11.5
-Farbe: 3487029
----------------------------------------
-Text: X_SYS_CONF
-Position: (300.0, 550.0, 520.0, 565.0)
-Schriftart: Helvetica-Regular
-Schriftgröße: 11.5
+Schriftgröße: 10.5
 Farbe: 866432
 ---------------------------------------
 Text: tom-90
