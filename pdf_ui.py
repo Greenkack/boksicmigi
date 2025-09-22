@@ -1212,8 +1212,8 @@ def render_pdf_ui(
             project_data['pdf_services'] = dict(pdf_services_state)
         
         st.markdown("---")
-    submitted_generate_pdf = st.form_submit_button(label=f"**{get_text_pdf_ui(texts, 'pdf_generate_button', 'Angebots-PDF erstellen')}**", type="primary", disabled=submit_button_disabled)
-        if submitted_generate_pdf: # Werte aus temporären Keys in die Haupt-Session-State-Keys übernehmen
+        submitted_generate_pdf = st.form_submit_button(label=f"**{get_text_pdf_ui(texts, 'pdf_generate_button', 'Angebots-PDF erstellen')}**", type="primary", disabled=submit_button_disabled)
+        if submitted_generate_pdf:  # Werte aus temporären Keys in die Haupt-Session-State-Keys übernehmen
             append_after_main7_flag_submit = bool(st.session_state.pdf_inclusion_options.get("append_additional_pages_after_main7", False))
             if append_after_main7_flag_submit:
                 st.session_state.pdf_inclusion_options["company_document_ids_to_include"] = st.session_state.pdf_inclusion_options.pop("_temp_company_document_ids_to_include", [])
