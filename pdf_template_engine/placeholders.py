@@ -394,33 +394,7 @@ PLACEHOLDER_MAPPING.update({
         "38,01 % .": "sustainability_co2_reduction_percent",  # zweite Variante (geändertes Template)
 })
 
-# Seite 6 – Zusammenfassung (Labels -> dynamische Werte)
-PLACEHOLDER_MAPPING.update({
-    "X_ANLAGE_KWP": "anlage_kwp",
-    "X_MODULE_COUNT": "pv_modules_count_with_unit",
-    "X_MODUL_WATT": "module_power_per_panel_watt",
-    "X_WR_LEISTUNG": "inverter_total_power_kw",
-    "X_SPEICHER": "storage_capacity_kwh",
-    "X_JAHRESPROD": "annual_pv_production_kwh",
-    "X_EIGENVERBR": "self_consumption_percent",
-    "X_AUTARKIE": "self_supply_rate_percent",
-    "X_EEG_EUR": "annual_feed_in_revenue_eur",
-    "X_SAVINGS_TOTAL": "total_annual_savings_eur",
-    "X_DIR_EUR": "self_consumption_without_battery_eur",
-    "X_FEED_EUR": "annual_feed_in_revenue_eur",
-    "X_TAX_EUR": "tax_benefits_eur",
-    "X_AMORT": "amortization_time",
-    "X_MOD_GAR": "module_guarantee_combined",
-    "X_WR_GAR": "inverter_guarantee_text",
-    "X_SPEICHER_GAR": "storage_warranty_text",
-    # Für die Zusammenfassung verwenden wir eine saubere CO2 Zahl ohne Ellipse
-    "X_CO2_KG": "sustainability_annual_co2_savings_kg_clean",
-    "X_CO2_REDUKTION": "sustainability_co2_reduction_percent",
-    "X_CO2_KM": "sustainability_car_km_equivalent_long",
-    "X_CO2_BAEUME": "sustainability_tree_equivalent_with_label",
-    # Kombinierte Systemkonfiguration eigener Key
-    "X_SYS_CONF": "summary_system_configuration",
-})
+## (Entfernt) Seite 6 frühere KPI-Zusammenfassung wurde durch Produkt & Dienstleistungen ersetzt
 
 # Seite 6 – Dienstleistungsplatzhalter (Standard & optional)
 PLACEHOLDER_MAPPING.update({
@@ -448,6 +422,24 @@ PLACEHOLDER_MAPPING.update({
     "X_SRV_ENERGIEMANAGEMENT": "service_energy_management_system",
     "X_SRV_DYNAMISCHER_TARIF": "service_dynamic_tariff_activation",
     "X_SRV_SONSTIGES": "service_custom_entries_joined",
+    # Dynamische Labels (werden geleert wenn Service deaktiviert)
+    "X_LBL_BERATUNG": "label_service_consulting",
+    "X_LBL_PLANUNG": "label_service_planning",
+    "X_LBL_PROJEKTIERUNG": "label_service_project_management",
+    "X_LBL_OPTIMIERUNG": "label_service_optimization",
+    "X_LBL_EVU_GENEHMIGUNG": "label_service_grid_application",
+    "X_LBL_DC_MONTAGE": "label_service_dc_installation",
+    "X_LBL_AC_INSTALLATION": "label_service_ac_installation",
+    "X_LBL_SPEICHER_INSTALLATION": "label_service_storage_installation",
+    "X_LBL_INBETRIEBNAHME": "label_service_commissioning_training",
+    "X_LBL_FERTIGMELDUNG_EVU": "label_service_grid_completion",
+    "X_LBL_WEITERE": "label_service_additional_tasks",
+    "X_LBL_WALLBOX_LEITUNG": "label_service_wallbox_cabling",
+    "X_LBL_NOTSTROM_AKTIVIERUNG": "label_service_backup_power_activation",
+    "X_LBL_ENERGIEMANAGEMENT": "label_service_energy_management_system",
+    "X_LBL_DYNAMISCHER_TARIF": "label_service_dynamic_tariff_activation",
+    "X_LBL_SONSTIGES": "label_service_custom_entries",
+    "X_SRV_SUMMARY": "service_summary_line",
 })
 
 
@@ -2986,17 +2978,18 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         result['summary_product_storage_line'] = ' | '.join(stor_line_parts)
 
         # Dienstleistungen – Standard & Optional
+        # Standard-Services können jetzt per Flag (true/false) deaktiviert werden.
         standard_services = {
-            'service_consulting': 'Beratung enthalten',
-            'service_planning': 'Planung enthalten',
-            'service_project_management': 'Projektierung enthalten',
-            'service_optimization': 'Optimierung enthalten',
-            'service_grid_application': 'Anmeldung / Genehmigung EVU enthalten',
-            'service_dc_installation': 'DC Montagearbeiten enthalten',
-            'service_ac_installation': 'AC Elektroinstallationsarbeiten enthalten',
-            'service_storage_installation': 'Installation Batteriespeicher enthalten',
-            'service_commissioning_training': 'Inbetriebnahme & Einweisung enthalten',
-            'service_grid_completion': 'Fertigmeldung bei EVU enthalten',
+            'service_consulting': 'Beratung',
+            'service_planning': 'Planung',
+            'service_project_management': 'Projektierung',
+            'service_optimization': 'Optimierung',
+            'service_grid_application': 'Anmeldung / Genehmigung EVU',
+            'service_dc_installation': 'DC Montagearbeiten',
+            'service_ac_installation': 'AC Elektroinstallationsarbeiten',
+            'service_storage_installation': 'Installation Batteriespeicher',
+            'service_commissioning_training': 'Inbetriebnahme & Einweisung',
+            'service_grid_completion': 'Fertigmeldung bei EVU',
         }
         optional_services = {
             'service_additional_tasks': 'Weitere Tätigkeiten',
@@ -3014,20 +3007,66 @@ def build_dynamic_data(project_data: Dict[str, Any] | None,
         # Checkbox-Modus 'extras_enabled' (setzt optionalen Block frei)
         extras_enabled = bool(pdf_services_cfg.get('extras_enabled', False))
 
-        # Standard-Services immer aktiv, außer explizit deaktiviert (allow_disable flag optional)
+        # Standard-Services: aktiv wenn Flag fehlt oder True; gesetzt auf '' wenn False
+        design_cfg = (project_data.get('pdf_design_config')
+                       or analysis_results.get('pdf_design_config')
+                       or project_data.get('inclusion_options', {}).get('pdf_design_config')
+                       or {})
+        checkmarks_on = bool(design_cfg.get('service_checkmarks_enabled', True))
+        symbol_style = design_cfg.get('service_symbol_style', 'check')  # check|checkbox|dot|none
+        hide_value_col = bool(design_cfg.get('service_value_column_hidden', False))
+        symbol_color = design_cfg.get('service_symbol_color')  # Hex
+        label_color = design_cfg.get('service_label_color')
+
+        # Map Symbolstil
+        def _symbol(active: bool) -> str:
+            if not active or not checkmarks_on or symbol_style == 'none' or hide_value_col:
+                return ''
+            if symbol_style == 'checkbox':
+                return '☑'
+            if symbol_style == 'dot':
+                return '•'
+            # default 'check'
+            return '✓'
+
         for k, label in standard_services.items():
-            disabled_flag = pdf_services_cfg.get(f"disable_{k}")
-            if disabled_flag:
-                result[k] = ''  # leer => Feld kann vom Renderer unterdrückt werden
-            else:
-                result[k] = label
+            enabled = pdf_services_cfg.get(k, True)
+            result[k] = _symbol(enabled)
+            # Dynamische Label-Ausgabe (gleiche Logik)
+            label_key = 'label_' + k
+            result[label_key] = label if enabled else ''
 
         # Optionale Services nur wenn extras_enabled und Flag aktiv
         for k, label in optional_services.items():
-            if extras_enabled and pdf_services_cfg.get(k, False):
-                result[k] = label + ' enthalten'
-            else:
-                result[k] = ''
+            enabled = extras_enabled and pdf_services_cfg.get(k, False)
+            result[k] = _symbol(enabled)
+            label_key = 'label_' + k
+            result[label_key] = label if enabled else ''
+
+        # Farbinformationen für Overlay-Engine (falls dort unterstützt)
+        if symbol_color:
+            result['service_symbol_color'] = symbol_color
+        if label_color:
+            result['service_label_color'] = label_color
+        result['service_value_column_hidden'] = '1' if hide_value_col else ''
+
+        # Custom Entries Label nur wenn Inhalte vorhanden
+        custom_entries_raw = pdf_services_cfg.get('custom_entries', '')
+        if isinstance(custom_entries_raw, str) and custom_entries_raw.strip():
+            result['label_service_custom_entries'] = 'Sonstiges / Individuelle Eintragung'
+        else:
+            result['label_service_custom_entries'] = ''
+
+        # Zusammenfassungszeile: Anzahl aktiver Dienstleistungen (Standard + optional + custom block)
+        active_service_keys = []
+        for k in list(standard_services.keys()) + list(optional_services.keys()):
+            if result.get(k):
+                active_service_keys.append(k)
+        if result.get('service_custom_entries_joined'):
+            active_service_keys.append('service_custom_entries_joined')
+        count_active = len(active_service_keys)
+        # Zusammenfassungszeile deaktiviert (Anforderung: Menge nicht anzeigen)
+        result['service_summary_line'] = ''
 
         # Custom / Sonstiges Einträge (Textarea, Zeilenumbrüche oder Semikolon trennen)
         custom_raw = pdf_services_cfg.get('custom_entries') or ''

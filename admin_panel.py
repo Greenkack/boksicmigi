@@ -1573,7 +1573,7 @@ def render_advanced_settings(load_admin_setting_func: Callable, save_admin_setti
                         for k_to_del in list(st.session_state.keys()):
                             if k_to_del not in ['_admin_panel_texts', 'selected_page_key_sui']: del st.session_state[k_to_del]
                         st.session_state.selected_page_key_sui = "admin" 
-                        st.experimental_rerun() 
+                        st.rerun() 
                     else: st.warning(f"Keine Datenbankdatei unter '{_db_path_for_reset}' zum Löschen gefunden.")
                 except Exception as e_reset_final_exc: st.error(f"Fehler beim Zurücksetzen der Daten: {e_reset_final_exc}")
             else: st.error(f"Falscher Bestätigungstext...")

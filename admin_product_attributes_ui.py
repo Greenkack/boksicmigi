@@ -54,7 +54,7 @@ if selected_model:
             cols[3].write(a.get('display_order'))
             if cols[4].button("Löschen", key=f"del_{a['id']}"):
                 delete_attribute(int(a['id']))
-                st.experimental_rerun()
+                st.rerun()
 
         st.markdown("---")
         st.subheader("Neues/Update Attribut")
@@ -69,6 +69,6 @@ if selected_model:
                     ok_id = upsert_attribute(int(prod['id']), prod.get('category') or category or '', akey, aval or None, unit or None, int(dord))
                     if ok_id:
                         st.success("Gespeichert")
-                        st.experimental_rerun()
+                        st.rerun()
                 else:
                     st.error("Key fehlt")

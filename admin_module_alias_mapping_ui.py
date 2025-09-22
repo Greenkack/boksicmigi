@@ -49,7 +49,7 @@ with st.expander("Schnell hinzufügen (häufige Modul-Keys)"):
                 current[src_p] = dst_p
                 if save_admin_setting("module_pdf_alias_map", current):
                     st.success(f"Preset gespeichert: '{src_p}' → '{dst_p}'")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Konnte nicht speichern.")
         i += 1
@@ -67,7 +67,7 @@ with st.form("alias_form"):
             current[src] = dst
             if save_admin_setting("module_pdf_alias_map", current):
                 st.success("Gespeichert.")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Konnte nicht speichern.")
 
@@ -79,7 +79,7 @@ if st.button("Löschen"):
         current.pop(del_key)
         if save_admin_setting("module_pdf_alias_map", current):
             st.success("Gelöscht.")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Konnte nicht speichern.")
     else:

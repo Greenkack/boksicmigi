@@ -306,7 +306,7 @@ def render_logo_position_settings(load_admin_setting_func, save_admin_setting_fu
                 st.session_state['show_logo_visual_preview'] = True
                 # Temporär Setting toggeln (Simulation unabhängig vom gespeicherten Wert)
                 align_with_titles_setting = not align_with_titles_setting
-                st.experimental_rerun()
+                st.rerun()
 
 def render_logo_position_test():
     """Test-Funktion für Logo-Positionen"""

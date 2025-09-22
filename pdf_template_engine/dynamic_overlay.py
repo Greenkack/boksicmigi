@@ -410,6 +410,13 @@ def generate_overlay(coords_dir: Path, dynamic_data: Dict[str, str], total_pages
                         "original_text": ttxt,
                     }
 
+        # Seite 6: Dynamisches Nachrücken (Compacting) für Produkt- & Dienstleistungszeilen
+        if i == 6:
+            try:
+                elements = _compact_page6_elements(elements, dynamic_data, page_height)
+            except Exception as e:
+                print(f"WARN: Compacting Seite6 fehlgeschlagen: {e}")
+
         for elem in elements:
             text = elem.get("text", "")
             key = PLACEHOLDER_MAPPING.get(text)
@@ -434,7 +441,35 @@ def generate_overlay(coords_dir: Path, dynamic_data: Dict[str, str], total_pages
             except Exception:
                 c.setFont("Helvetica", font_size)
             color_int = int(elem.get("color", 0))
-            c.setFillColor(int_to_color(color_int))
+            # Dynamische Farblogik für Seite 6 Dienstleistungen
+            if i == 6 and key:
+                try:
+                    # Service-Design-Farben aus dynamic_data
+                    sym_color_hex = dynamic_data.get('service_symbol_color')
+                    lbl_color_hex = dynamic_data.get('service_label_color')
+                    hide_val_col = bool(dynamic_data.get('service_value_column_hidden'))
+                    is_label = text.startswith('X_LBL_')
+                    is_value = text.startswith('X_SRV_') or text.startswith('X_PROD_')
+                    def _hex_to_color(h):
+                        from reportlab.lib.colors import Color
+                        h = h.lstrip('#')
+                        if len(h) == 6:
+                            r = int(h[0:2],16)/255.0; g=int(h[2:4],16)/255.0; b=int(h[4:6],16)/255.0
+                            return Color(r,g,b)
+                        return int_to_color(color_int)
+                    if is_label and lbl_color_hex:
+                        c.setFillColor(_hex_to_color(lbl_color_hex))
+                    elif is_value and sym_color_hex:
+                        c.setFillColor(_hex_to_color(sym_color_hex))
+                    else:
+                        c.setFillColor(int_to_color(color_int))
+                    # Value-Spalte ausblenden erzwingen (leer zeichnen) – wenn hide aktiv und es ist Value
+                    if hide_val_col and is_value and (text.startswith('X_SRV_') or text.startswith('X_PROD_')):
+                        draw_text = ''
+                except Exception:
+                    c.setFillColor(int_to_color(color_int))
+            else:
+                c.setFillColor(int_to_color(color_int))
 
             # Seite 3: Ersetzte / entfernte statische 10-Jahres-Kosten NICHT erneut zeichnen
             if i == 3 and text in {"46.296,00 €", "58.230,61 €"}:
@@ -553,6 +588,147 @@ def generate_overlay(coords_dir: Path, dynamic_data: Dict[str, str], total_pages
         c.showPage()
     c.save()
     return buffer.getvalue()
+
+
+def _compact_page6_elements(elements: List[Dict[str, Any]], dynamic_data: Dict[str, str], page_height: float) -> List[Dict[str, Any]]:
+    """Verdichtet Seite 6 vertikal: Entfernt deaktivierte Dienstleistungszeilen.
+
+    Strategie:
+    - Identifiziere Paare (Label + Wert) anhand ihrer Y-Position (Originalkoordinaten in YAML).
+    - Ein Paar gehört zur Dienstleistungen-/Produkte-Sektion, wenn BOTH:
+        * Text ist Platzhalter (beginnt mit 'X_LBL_' oder 'X_SRV_' oder 'X_PROD_') ODER bereits gemappt wurde
+        * Y-Koordinate im Bereich des Dienstleistungsblocks liegt (>= ~190 und <= ~600 in Vorlage)
+    - Wenn sowohl Label- als auch Value-Platzhalter leer (dynamic_data liefert "") -> Paar wird entfernt.
+    - Übrige Paare werden in Originalreihenfolge neu nach unten versetzt ohne Lücken.
+    - Nicht-betroffene Elemente (Header, Footer, Summary, etc.) bleiben unverändert.
+    """
+    # Bereich in dem Produkt + Dienstleistungszeilen liegen (aus seite6.yml entnommen)
+    Y_MIN = 120.0  # etwas großzügiger für Produktzeilen
+    Y_MAX = 610.0
+
+    # Hilfsfunktion: Hole Canvas-Y1 (oberer Rand) aus Positionstuple
+    def _y_top(pos_tuple):
+        if not (isinstance(pos_tuple, tuple) and len(pos_tuple) == 4):
+            return None
+        # YAML speichert (x0, y0, x1, y1) mit y1 als maxY (unten?) -> In Vorlage: (70, 200, 200, 215)
+        # Wir nehmen das obere Ende als y1
+        return float(pos_tuple[1]) if pos_tuple[1] < pos_tuple[3] else float(pos_tuple[3])
+
+    # Sammle Kandidaten in Reihenfolge, wie sie im YAML stehen
+    service_rows: List[Dict[str, Any]] = []
+    other_elements: List[Dict[str, Any]] = []
+
+    for el in elements:
+        txt = (el.get("text") or "").strip()
+        pos = el.get("position")
+        y_top = _y_top(pos)
+        if y_top is None:
+            other_elements.append(el)
+            continue
+        if Y_MIN <= y_top <= Y_MAX and (txt.startswith("X_LBL_") or txt.startswith("X_SRV_") or txt.startswith("X_PROD_")):
+            service_rows.append(el)
+        else:
+            other_elements.append(el)
+
+    # Gruppiere Zeilenpaare: Label (X_LBL_*) + Wert (X_SRV_* oder X_PROD_*)
+    # Vorgehen: Sortiere nach y (aufsteigend) und verarbeite sequentiell
+    service_rows_sorted = sorted(service_rows, key=lambda e: _y_top(e.get("position")) or 0.0)
+
+    compacted: List[Dict[str, Any]] = []
+    buffer_pair: List[Dict[str, Any]] = []
+
+    def _flush_pair(pair: List[Dict[str, Any]]):
+        for p in pair:
+            compacted.append(p)
+
+    for el in service_rows_sorted:
+        txt = (el.get("text") or "").strip()
+        key = PLACEHOLDER_MAPPING.get(txt)
+        dyn_val = dynamic_data.get(key, "") if key else None
+        is_label = txt.startswith("X_LBL_")
+        is_value = txt.startswith("X_SRV_") or txt.startswith("X_PROD_")
+
+        if is_label:
+            # Falls vorheriges Paar unvollständig -> flush
+            if buffer_pair:
+                _flush_pair(buffer_pair)
+                buffer_pair = []
+            buffer_pair.append(el)
+        elif is_value:
+            buffer_pair.append(el)
+            # Paar komplett -> entscheiden ob behalten
+            lbl_el = buffer_pair[0] if buffer_pair else None
+            val_el = buffer_pair[1] if len(buffer_pair) > 1 else None
+            # Prüfe dyn Werte: Wenn sowohl Label als auch Value leer -> verwerfen
+            lbl_key = PLACEHOLDER_MAPPING.get((lbl_el.get("text") or "").strip()) if lbl_el else None
+            lbl_val = dynamic_data.get(lbl_key, "") if lbl_key else ""
+            val_key = PLACEHOLDER_MAPPING.get((val_el.get("text") or "").strip()) if val_el else None
+            val_val = dynamic_data.get(val_key, "") if val_key else ""
+            if lbl_val or val_val:
+                _flush_pair(buffer_pair)
+            # Else: verwerfen (nicht hinzufügen)
+            buffer_pair = []
+        else:
+            # Unbekannt im service block -> direkt flush bestehendes Pair
+            if buffer_pair:
+                _flush_pair(buffer_pair)
+                buffer_pair = []
+            compacted.append(el)
+
+    # Rest flush
+    if buffer_pair:
+        _flush_pair(buffer_pair)
+
+    # Jetzt vertikal nachrücken: Wir nehmen die ursprüngliche erste Y-Top-Position aller service_rows_sorted
+    if not service_rows_sorted:
+        return elements
+
+    first_top = min(_y_top(el.get("position")) for el in service_rows_sorted if _y_top(el.get("position")) is not None) or 0.0
+    # Zeilenhöhenabschätzung: typischer Abstand zwischen aufeinanderfolgenden Label-Zeilen aus Vorlage
+    # Wir lesen Mittelwert der Deltas aus originalen service_rows_sorted
+    deltas = []
+    prev_y = None
+    for el in service_rows_sorted:
+        y = _y_top(el.get("position"))
+        if prev_y is not None and y is not None:
+            deltas.append(abs(y - prev_y))
+        prev_y = y
+    default_delta = 20.0
+    if deltas:
+        avg_delta = sum(deltas) / len(deltas)
+        # Begrenze den Bereich sinnvoll
+        if 10.0 <= avg_delta <= 30.0:
+            default_delta = avg_delta
+
+    # Weise neue Positionen zu (Paare hintereinander)
+    new_y_top = first_top
+    new_elements_map = {id(el): el for el in elements}
+    processed_ids = set()
+    for el in compacted:
+        txt = (el.get("text") or "").strip()
+        if not (txt.startswith("X_LBL_") or txt.startswith("X_SRV_") or txt.startswith("X_PROD_")):
+            continue
+        pos = el.get("position")
+        if not (isinstance(pos, tuple) and len(pos) == 4):
+            continue
+        x0, y0, x1, y1 = pos
+        height = abs(y1 - y0)
+        # Verschiebe Block sodass obere Kante bei new_y_top liegt
+        # Annahme: y0 < y1 (wie in YAML) – belasse Höhe
+        new_y0 = new_y_top
+        new_y1 = new_y_top + height
+        el['position'] = (x0, new_y0, x1, new_y1)
+        processed_ids.add(id(el))
+        # Nach Value-Zeile erhöhen (wir erkennen Value-Zeile an X_SRV_/X_PROD_ und daran, dass vorher Label kam)
+        if txt.startswith("X_SRV_") or txt.startswith("X_PROD_"):
+            new_y_top = new_y1 + (default_delta * 0.5)  # etwas kompakter als Original
+
+    # Rekombiniere: Header/Footer/Andere + kompaktierte Service-Elemente
+    # Sortiere nach ursprünglicher Reihenfolge (stabil) außer dass verschobene neue Positionen gelten
+    final_list = []
+    for el in elements:
+        final_list.append(el)
+    return final_list
 
 def _draw_page3_right_chart_and_separator(c: canvas.Canvas, elements: List[Dict[str, Any]], dynamic_data: Dict[str, str], page_width: float, page_height: float) -> None:
     """Seite 3: Rechts NUR die 20-Jahres-Gesamtergebnisse als Text + vertikale Trennlinie.

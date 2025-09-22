@@ -361,7 +361,7 @@ def render_solar_calculator(texts: Dict[str, str], module_name: Optional[str] = 
         with col_nav2:
             if st.button(_get_text(texts, 'next_page_label', 'Nächste Seite'), key='btn_to_step2_sc_v1'):
                 st.session_state['solar_calc_step'] = 2
-                st.experimental_rerun()
+                st.rerun()
 
     elif step == 2:
         st.subheader(_get_text(texts, 'additional_components_header', 'Zusätzliche Komponenten'))
@@ -424,7 +424,7 @@ def render_solar_calculator(texts: Dict[str, str], module_name: Optional[str] = 
         with col_back:
             if st.button(_get_text(texts, 'back_label', 'Zurück'), key='btn_back_step1_sc_v1'):
                 st.session_state['solar_calc_step'] = 1
-                st.experimental_rerun()
+                st.rerun()
         with col_finish:
             if st.button(_get_text(texts, 'start_calculations_label', 'Berechnungen Starten'), key='btn_finish_sc_v1'):
                 # Navigation zurück in Analysebereich (Annahme: 'analysis')
@@ -435,7 +435,7 @@ def render_solar_calculator(texts: Dict[str, str], module_name: Optional[str] = 
                 except Exception:
                     pass
                 st.session_state['solar_calc_step'] = 1  # Reset für nächsten Aufruf
-                st.experimental_rerun()
+                st.rerun()
 
     # Abschluss Hinweis (nur Schritt 1 zeigt fortlaufend Info, Schritt 2 via Button)
     if step == 1:

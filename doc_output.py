@@ -1213,15 +1213,12 @@ def render_pdf_ui(
         
         with color_tabs[0]:  # Color Scheme
             color_col1, color_col2 = st.columns(2)
-            
             with color_col1:
                 primary_color = st.color_picker(" Primärfarbe", value="#667eea")
                 secondary_color = st.color_picker(" Sekundärfarbe", value="#764ba2")
-                
             with color_col2:
                 accent_color = st.color_picker(" Akzentfarbe", value="#ff7b7b")
                 text_color = st.color_picker(" Textfarbe", value="#333333")
-                
             # Farb-Vorschau
             st.markdown(f"""
             <div style="display: flex; gap: 10px; margin: 15px 0;">
@@ -1231,6 +1228,13 @@ def render_pdf_ui(
                 <div style="width: 50px; height: 50px; background: {text_color}; border-radius: 8px; border: 2px solid #ddd;"></div>
             </div>
             """, unsafe_allow_html=True)
+
+        # Vereinheitlichte Sektion: Dienstleistungen Darstellung (ausgelagert)
+        try:
+            from service_display_config_ui import render_service_display_config
+            render_service_display_config(st.session_state.pdf_design_config)
+        except Exception as e:
+            st.warning(f"Service Display UI konnte nicht geladen werden: {e}")
         
         with color_tabs[1]:  # Gradients
             gradient_options = st.columns(3)
@@ -2156,6 +2160,9 @@ def render_pdf_ui(
         
         wow_col1, wow_col2 = st.columns(2)
         with wow_col1:
+            # Defensive Initialisierung, falls Key fehlt
+            if 'wow_features' not in extended_features or not isinstance(extended_features.get('wow_features'), dict):
+                extended_features['wow_features'] = {}
             extended_features['wow_features']['shadows'] = st.checkbox(
                 " Schatten-Effekte",
                 value=extended_features['wow_features'].get('shadows', False),

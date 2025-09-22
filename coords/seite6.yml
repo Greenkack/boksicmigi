@@ -42,7 +42,7 @@ Schriftgröße: 11.5
 Farbe: 866432
 ---------------------------------------
 # Standard-Dienstleistungen
-Text: Beratung
+Text: X_LBL_BERATUNG
 Position: (70.0, 200.0, 200.0, 215.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -54,7 +54,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Planung
+Text: X_LBL_PLANUNG
 Position: (70.0, 220.0, 200.0, 235.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -66,7 +66,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Projektierung
+Text: X_LBL_PROJEKTIERUNG
 Position: (70.0, 240.0, 200.0, 255.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -78,7 +78,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Optimierung
+Text: X_LBL_OPTIMIERUNG
 Position: (70.0, 260.0, 200.0, 275.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -90,7 +90,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Anmeldung / Genehmigung EVU
+Text: X_LBL_EVU_GENEHMIGUNG
 Position: (70.0, 280.0, 200.0, 295.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -102,7 +102,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: DC Montagearbeiten
+Text: X_LBL_DC_MONTAGE
 Position: (70.0, 300.0, 200.0, 315.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -114,7 +114,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: AC Elektroinstallationsarbeiten
+Text: X_LBL_AC_INSTALLATION
 Position: (70.0, 320.0, 200.0, 335.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -126,7 +126,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Installation Batteriespeicher
+Text: X_LBL_SPEICHER_INSTALLATION
 Position: (70.0, 340.0, 220.0, 355.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -138,7 +138,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Inbetriebnahme und Einweisung
+Text: X_LBL_INBETRIEBNAHME
 Position: (70.0, 360.0, 220.0, 375.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -150,7 +150,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Fertigmeldung bei EVU
+Text: X_LBL_FERTIGMELDUNG_EVU
 Position: (70.0, 380.0, 220.0, 395.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -163,7 +163,7 @@ Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
 # Optionale Dienstleistungen
-Text: Weitere Tätigkeiten
+Text: X_LBL_WEITERE
 Position: (70.0, 410.0, 220.0, 425.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -175,7 +175,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Leitungsverlegung Wallbox
+Text: X_LBL_WALLBOX_LEITUNG
 Position: (70.0, 430.0, 220.0, 445.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -187,7 +187,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Aktivierung Notstromversorgung
+Text: X_LBL_NOTSTROM_AKTIVIERUNG
 Position: (70.0, 450.0, 220.0, 465.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -199,7 +199,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Installation Energiemanagementsystem
+Text: X_LBL_ENERGIEMANAGEMENT
 Position: (70.0, 470.0, 230.0, 485.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -211,7 +211,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Aktivierung dynamischer Stromtarif
+Text: X_LBL_DYNAMISCHER_TARIF
 Position: (70.0, 490.0, 230.0, 505.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -223,7 +223,7 @@ Schriftart: Helvetica-Regular
 Schriftgröße: 11.0
 Farbe: 866432
 ---------------------------------------
-Text: Sonstiges / Individuelle Eintragung
+Text: X_LBL_SONSTIGES
 Position: (70.0, 510.0, 250.0, 525.0)
 Schriftart: Helvetica-Bold
 Schriftgröße: 11.0
@@ -234,6 +234,12 @@ Position: (200.0, 510.0, 520.0, 570.0)
 Schriftart: Helvetica-Regular
 Schriftgröße: 10.5
 Farbe: 866432
+---------------------------------------
+Text: X_SRV_SUMMARY
+Position: (70.0, 585.0, 520.0, 600.0)
+Schriftart: Helvetica-Bold
+Schriftgröße: 11.0
+Farbe: 3487029
 ---------------------------------------
 Text: tom-90
 Position: (39.658077239990234, 814.5894775390625, 72.79461669921875, 827.7636108398438)
